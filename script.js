@@ -313,7 +313,7 @@ function initAnalytics(songs) {
     { key: "total",    label: "逆詐称/詐称度", color: "rgba(255, 99, 132, 0.7)" },
     { key: "tairyoku",  label: "体力要求度",   color: "rgba(54, 162, 235, 0.7)" },
     { key: "kenban",    label: "鍵盤力要求度", color: "rgba(255, 206, 86, 0.7)" },
-    { key: "chuni",     label: "チュウニ力",   color: "rgba(75, 192, 192, 0.7)" },
+    { key: "chuni",     label: "チュウニ力要求度",   color: "rgba(75, 192, 192, 0.7)" },
     { key: "kuse",      label: "癖度",         color: "rgba(153, 102, 255, 0.7)" }
   ];
 
@@ -386,7 +386,7 @@ function initAnalytics(songs) {
   });
 }
 
-// 11. 各項目を切り替えた時のグラフ描画ロジック（スマホの曲名潰れ防止処理内蔵）
+// 11. 各項目を切り替えた時のグラフ描画ロジック（逆詐称/詐称度を基準コストからの差分に変更）
 function switchMetric(targetConst, metricKey, color, labelText, songs) {
   const chartId = targetConst;
   const canvasId = `canvas-${targetConst.replace('.', '_')}`;
@@ -399,10 +399,22 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
     return songConstStr === targetConst;
   });
   
-  let sorted = [...filtered].sort((a, b) => (b[metricKey] || 0) - (a[metricKey] || 0));
+  const baseCost = baseCostMap[targetConst] || 16;
+
+  // 💡 データのソートとマッピング
+  let sorted = [...filtered];
   
-  if (metricKey !== "total") {
-    sorted = sorted.slice(0, 20); // 項目別ランキングは上位20件に絞る
+  if (metricKey === "total") {
+    // 逆詐称/詐称度の場合は「合計 - 基準コスト（差分）」が大きい順にソート
+    sorted.sort((a, b) => {
+      const diffA = (a.total || 0) - (a.baseCost || baseCost);
+      const diffB = (b.total || 0) - (b.baseCost || baseCost);
+      return diffB - diffA;
+    });
+  } else {
+    // その他の項目は従来通り要求度が高い順にソートし、上位20件に絞る
+    sorted.sort((a, b) => (b[metricKey] || 0) - (a[metricKey] || 0));
+    sorted = sorted.slice(0, 20);
   }
 
   const containerEl = document.getElementById(`canvas-container-${targetConst.replace('.', '_')}`);
@@ -415,19 +427,27 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
     const shortTitle = s.title.length > 10 ? s.title.substring(0, 10) + "..." : s.title;
     return `${shortTitle} (${s.diff})`;
   });
-  const dataValues = sorted.map(s => s[metricKey] || 0);
+
+  // 💡 グラフに渡す数値を計算
+  const dataValues = sorted.map(s => {
+    if (metricKey === "total") {
+      // 逆詐称/詐称度のときは「回答の合計 - その曲の基準コスト」で -2 ～ +2 のデータを生成
+      return (s.total || 0) - (s.baseCost || baseCost);
+    }
+    return s[metricKey] || 0;
+  });
 
   if (activeCharts[chartId]) {
     activeCharts[chartId].destroy();
   }
 
-  const baseCost = baseCostMap[targetConst] || 16; 
+  // 💡 横軸（X軸）の範囲設定
   let xMin = 0;
   let xMax = baseCost + 2; 
 
   if (metricKey === "total") {
-    xMin = baseCost - 2;
-    xMax = baseCost + 2;
+    xMin = -2; // 基準より低い（逆詐称）
+    xMax = 2;  // 基準より高い（詐称）
   }
 
   activeCharts[chartId] = new Chart(ctx, {
@@ -449,13 +469,18 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            // ポップアップの時は省略なしの正式な曲名を表示する
             title: function(context) {
               const index = context[0].dataIndex;
               return `${sorted[index].title} (${sorted[index].diff})`;
             },
             label: function(context) {
-              return ` ${labelText}: ${context.raw.toFixed(2)}`;
+              // 💡 ツールチップの表示テキストも調整
+              const val = context.raw;
+              if (metricKey === "total") {
+                const sign = val > 0 ? "+" : "";
+                return ` ${labelText}: ${sign}${val.toFixed(2)} (基準: ${sorted[context.dataIndex].baseCost || baseCost})`;
+              }
+              return ` ${labelText}: ${val.toFixed(2)}`;
             }
           }
         }
@@ -465,7 +490,7 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
           min: xMin, 
           max: xMax, 
           ticks: {
-            stepSize: 1, 
+            stepSize: 1, // 横軸は整数目盛り（-2, -1, 0, 1, 2）
             callback: function(value) {
               if (Math.floor(value) === value) return value;
             }

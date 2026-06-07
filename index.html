@@ -5,14 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>チュウニズム譜面傾向アンケート</title>
   
+  <!-- 外部CSSファイル (style.css) の読み込み -->
   <link rel="stylesheet" href="style.css">
   
+  <!-- 外部ライブラリ (Chart.js) の読み込み -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
   <h2>チュウニズム譜面傾向アンケート</h2>
 
+  <!-- ログイン・初期画面 -->
   <div id="login-screen">
     <p style="font-weight:bold; margin-bottom:8px; font-size:14px;">回答に使用するユーザー名を入力してください</p>
     <p style="font-size:11px; color:#8e8e93; margin-top:0;">※過去に回答がある場合、自動的にデータを復元します</p>
@@ -20,15 +23,29 @@
     <button type="button" class="btn-primary" onclick="startSurvey()">アンケートを開始・復元する</button>
   </div>
 
+  <!-- 📊 傾向分析ランキング -->
   <div id="analytics-section">
     <h3 style="margin-top: 0; border-bottom: 2px solid #0076f6; padding-bottom: 6px; color: #1c1c1e; font-size: 15px;"> 譜面傾向ランキング分析</h3>
-    <p style="font-size: 11px; color: #666; margin-bottom: 12px; line-height: 1.4;">定数枠を選択するとグラフが開きます。「逆詐称/詐称度」は全曲、その他は上位20曲が表示されます。</p>
+    <p style="font-size: 11px; color: #666; margin-bottom: 8px; line-height: 1.4;">定数枠を選択するとグラフが開きます。「逆詐称/詐称度」は全曲、その他は上位20曲が表示されます。</p>
+    
+    <!-- 💡 追加箇所：トップページ用の傾向説明ボックス -->
+    <div class="rule-container" style="margin-bottom: 16px; background: #fafafa; border-color: #e5e5ea;">
+      <div class="rule-title" style="font-size: 12px; color: #666;"> 各譜面傾向の定義</div>
+      <ul class="rule-list" style="list-style-type: square; color: #666;">
+        <li><strong>体力：</strong>腕の瞬発力、持久力が必要なもの</li>
+        <li><strong>鍵盤：</strong>指押しの技術が必要なもの</li>
+        <li><strong>チュウニ力：</strong>タプスラ、フリック、交差、縦連判定への耐性が必要なもの</li>
+        <li><strong>癖：</strong>長い縦連や片手トリル、ソフラン、極度のリズム難など、類似譜面が非常に少ないもの</li>
+      </ul>
+    </div>
     
     <div id="drawer-container"></div>
   </div>
 
+  <!-- ローディング表示 -->
   <div id="loading">データを読み込み中...</div>
 
+  <!-- アンケート回答画面（メイン） -->
   <div id="main-screen">
     <button type="button" onclick="backToMainScreen()" style="width:100%; padding:10px; font-size:13px; font-weight:bold; background:#636366; color:white; border:none; border-radius:8px; cursor:pointer; margin-bottom:12px;">
       ⬅ 名前入力・ランキング画面に戻る
@@ -39,6 +56,7 @@
       変更した定数タブごとに最下部の「保存」ボタンを押すことで、何回でも小分けにして修正・保存が可能です。
     </div>
 
+    <!-- 定数切り替えタブ -->
     <div class="tab-container">
       <button class="tab-btn active" onclick="switchTab('15.0')">15.0</button>
       <button class="tab-btn" onclick="switchTab('15.1')">15.1</button>
@@ -47,10 +65,12 @@
       <button class="tab-btn" onclick="switchTab('15.4')">15.4</button>
     </div>
 
+    <!-- 基準コスト表示アラート -->
     <div class="current-base-cost-alert">
       現在選択中：定数 <span id="label-current-tab">15.0</span> の基準コストは【<span id="label-base-cost">16</span>】です（許容範囲: <span id="label-cost-range">14〜18</span>）
     </div>
 
+    <!-- ルールと各項目の説明 -->
     <div class="rule-container">
       <div class="rule-title"> コストの割り振りルール</div>
       <ul class="rule-list">
@@ -67,6 +87,7 @@
       </ul>
     </div>
 
+    <!-- フィルター・検索エリア -->
     <div class="filter-container">
       <input type="text" id="search-input" class="search-box" oninput="renderSongs()" placeholder="曲名で検索...">
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
@@ -79,13 +100,16 @@
       </div>
     </div>
 
+    <!-- 楽曲カードが並ぶエリア -->
     <div id="songs-wrapper"></div>
 
+    <!-- 固定下部アクションエリア -->
     <div class="action-container">
       <button type="button" id="save-btn" onclick="saveCurrentTab()" disabled>このページの回答を保存する</button>
     </div>
   </div>
 
+  <!-- 外部JavaScriptファイル (script.js) の読み込み -->
   <script src="script.js"></script>
 </body>
 </html>
