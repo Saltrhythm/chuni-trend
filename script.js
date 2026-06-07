@@ -1,3 +1,5 @@
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyZ9uEqIEcxIp0oavqNjTImIXTwpMl7VGW4yMkwodCKwBRWH7ghuWlXaoXm1sa9Kmm-/exec";
+
 let globalSongs = []; 
 let currentTabStr = "15.0";
 let currentUserName = "";
