@@ -26,7 +26,7 @@
     .input-text { width: 80%; padding: 12px; font-size: 16px; border: 1px solid #c7c7cc; border-radius: 8px; margin-bottom: 16px; text-align: center; }
     .btn-primary { width: 85%; padding: 14px; font-size: 16px; font-weight: bold; background: #0076f6; color: white; border: none; border-radius: 8px; cursor: pointer; }
     
-    /* 📊 傾向分析ランキング（追加：ドロワーのスタイル） */
+    /* 📊 傾向分析ランキング */
     #analytics-section { margin-top: 40px; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     .drawer-wrapper { border: 1px solid #e5e5ea; border-radius: 8px; margin-bottom: 12px; overflow: hidden; background: #fff; }
     .drawer-header { width: 100%; background: #f2f2f7; padding: 14px; text-align: left; border: none; font-size: 14px; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: #1c1c1e; }
@@ -47,6 +47,11 @@
     .search-box { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #c7c7cc; border-radius: 6px; box-sizing: border-box; }
     .checkbox-label { display: flex; align-items: center; font-size: 13px; font-weight: bold; color: #3a3a3c; cursor: pointer; }
     .checkbox-label input { width: 18px; height: 18px; margin-right: 8px; cursor: pointer; }
+    
+    /* 💡 追加：一括リセットボタンのスタイル（赤枠のスタイリッシュなボタン） */
+    .btn-outline-danger { padding: 8px 12px; font-size: 12px; font-weight: bold; color: #ff3b30; background: transparent; border: 1px solid #ff3b30; border-radius: 6px; cursor: pointer; transition: all 0.2s; text-align: center; }
+    .btn-outline-danger:hover { background: #ff3b30; color: white; }
+
     .empty-message { text-align: center; padding: 40px 20px; color: #8e8e93; font-size: 14px; background: white; border-radius: 12px; }
 
     /* 楽曲カード */
@@ -131,9 +136,14 @@
 
     <div class="filter-container">
       <input type="text" id="search-input" class="search-box" oninput="renderSongs()" placeholder="曲名で検索...">
-      <label class="checkbox-label">
-        <input type="checkbox" id="unanswered-only" onchange="renderSongs()"> 未回答の譜面のみを表示する
-      </label>
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <label class="checkbox-label">
+          <input type="checkbox" id="unanswered-only" onchange="renderSongs()"> 未回答の譜面のみを表示する
+        </label>
+        <button type="button" class="btn-outline-danger" onclick="resetCurrentTabAnswers()">
+          🗑 このページの回答をすべてリセット
+        </button>
+      </div>
     </div>
 
     <div id="songs-wrapper"></div>
@@ -305,6 +315,7 @@
 
     function updateCost(globalIndex) {
       const card = document.getElementById(`card-${globalIndex}`);
+      if (!card) return; // 一括リセット等でDOMが消えている場合の安全対策
       const minV = parseInt(card.getAttribute('data-min'));
       const maxV = parseInt(card.getAttribute('data-max'));
       
@@ -342,6 +353,31 @@
       checkTabValidity();
     }
 
+    /**
+     * 💡 追加：現在選択されている定数タブの楽曲データをすべて0（未回答）にリセットする
+     */
+    function resetCurrentTabAnswers() {
+      // ユーザーへの確認アラート（誤操作防止）
+      if (!confirm(`現在開いている「定数 ${currentTabStr}」のすべての入力内容をリセットします。よろしいですか？\n※保存を確定するには、リセット後に画面下の「保存」ボタンを押してください。`)) {
+        return;
+      }
+
+      // 現在の定数タブに合致する楽曲のみメモリ上のデータを 0 にリセット
+      globalSongs.forEach(song => {
+        const songConstStr = song.constStr || (song.constant ? song.constant.toFixed(1) : "");
+        if (songConstStr === currentTabStr) {
+          song.tairyoku = 0;
+          song.kenban = 0;
+          song.chuni = 0;
+          song.kuse = 0;
+          song.total = 0;
+        }
+      });
+
+      // 画面（DOM）をリフレッシュして変更を即座に反映させる
+      renderSongs();
+    }
+
     function checkTabValidity() {
       const tabSongs = globalSongs.filter(s => {
         const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
@@ -376,13 +412,15 @@
       btn.disabled = true;
       btn.innerText = "保存処理中...";
       
+      // 💡 修正：一括リセット後に「すべての曲が未回答（total=0）」の状態をGASに送信して「空データを上書き（全削除）」できるように、
+      // 該当タブの全データを抽出する方式（または未回答データも含めて送る形）に最適化
       const currentTabSongs = globalSongs.filter(s => {
         const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
-        return songConstStr === currentTabStr && s.total > 0;
+        return songConstStr === currentTabStr;
       });
       
       if (currentTabSongs.length === 0) {
-        alert("このページには新しく保存するデータ、または有効な回答がありません。");
+        alert("このページには有効な楽曲データがありません。");
         btn.disabled = false;
         checkTabValidity();
         return;
