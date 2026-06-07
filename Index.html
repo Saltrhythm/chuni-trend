@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>チュウニズム譜面傾向アンケート</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 16px; background: #f1f2f6; color: #1c1c1e; max-width: 600px; margin: 0 auto; }
+    h2 { text-align: center; color: #0076f6; margin-bottom: 8px; }
+    .desc { font-size: 13px; color: #666; background: #fff; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #0076f6; line-height: 1.5; }
+    
+    /* ルール・基準の説明エリア */
+    .rule-container { background: #fff; padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; border: 1px solid #d1d1d6; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
+    .rule-title { font-size: 13px; font-weight: bold; color: #1c1c1e; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
+    .rule-list { margin: 0; padding-left: 18px; font-size: 12px; color: #3a3a3c; line-height: 1.6; }
+    .rule-list strong { color: #ff9500; }
+    
+    /*  追加：現在選択中のタブの基準コスト表示バッジ */
+    .current-base-cost-alert { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 10px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 16px; }
+    .current-base-cost-alert span { font-size: 18px; color: #0284c7; margin: 0 4px; }
+
+    /* ログイン画面 */
+    #login-screen { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; margin-top: 40px; }
+    .input-text { width: 80%; padding: 12px; font-size: 16px; border: 1px solid #c7c7cc; border-radius: 8px; margin-bottom: 16px; text-align: center; }
+    .btn-primary { width: 85%; padding: 14px; font-size: 16px; font-weight: bold; background: #0076f6; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    
+    /* メイン画面とタブUI */
+    #main-screen { display: none; }
+    .tab-container { display: flex; justify-content: space-between; background: #e5e5ea; padding: 4px; border-radius: 10px; margin-bottom: 12px; position: sticky; top: 0; z-index: 100; }
+    .tab-btn { flex: 1; padding: 10px 0; font-size: 14px; font-weight: bold; text-align: center; background: transparent; border: none; border-radius: 8px; cursor: pointer; color: #666; transition: all 0.2s; }
+    .tab-btn.active { background: white; color: #0076f6; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    
+    /* フィルター・検索エリア */
+    .filter-container { background: white; padding: 12px; border-radius: 10px; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); display: flex; flex-direction: column; gap: 10px; }
+    .search-box { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #c7c7cc; border-radius: 6px; box-sizing: border-box; }
+    .checkbox-label { display: flex; align-items: center; font-size: 13px; font-weight: bold; color: #3a3a3c; cursor: pointer; }
+    .checkbox-label input { width: 18px; height: 18px; margin-right: 8px; cursor: pointer; }
+    .empty-message { text-align: center; padding: 40px 20px; color: #8e8e93; font-size: 14px; background: white; border-radius: 12px; }
+
+    /* 楽曲カード */
+    .song-card { background: white; padding: 16px; margin-bottom: 16px; border-radius: 12px; box-shadow: 0 3px 8px rgba(0,0,0,0.04); border: 2px solid transparent; }
+    .song-card.card-ok { border-color: #34c759; background: #fbfdfb; }
+    .song-card.card-editing { border-color: #ff9500; background: #fffdf9; }
+    .song-card h3 { margin: 0 0 4px 0; font-size: 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .song-title-text { flex: 1; word-break: break-all; }
+    .diff-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; color: white; flex-shrink: 0; }
+    .diff-MAS { background: #9b5de5; } .diff-ULT { background: #ff007f; } .diff-EXP { background: #f15bb5; }
+    .song-meta { font-size: 12px; color: #8e8e93; margin-bottom: 12px; }
+    
+    /* パラメータ行とセレクトボックス */
+    .param-row { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding-bottom: 6px; border-bottom: 1px dashed #e5e5ea; }
+    .param-row label { font-size: 12px; font-weight: 500; color: #3a3a3c; line-height: 1.3; padding-right: 10px; }
+    .cost-select { width: 80px; padding: 6px; font-size: 14px; font-weight: bold; border: 1px solid #c7c7cc; border-radius: 6px; background-color: #f8f9fa; text-align: center; }
+    
+    /* ステータス表示 */
+    .status-container { margin-top: 12px; padding-top: 8px; border-top: 1px solid #e5e5ea; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .total-badge { font-weight: bold; background: #e5e5ea; padding: 2px 6px; border-radius: 4px; }
+    .calc-result { font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    .status-ok { color: white; background: #34c759; }
+    .status-ng { color: white; background: #ff3b30; }
+    .status-zero { color: #8e8e93; background: #e5e5ea; }
+    
+    /* 下部アクションエリア */
+    .action-container { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 -4px 10px rgba(0,0,0,0.05); margin-top: 20px; text-align: center; position: sticky; bottom: 0; }
+    #save-btn { width: 100%; padding: 14px; font-size: 16px; font-weight: bold; background: #ff9500; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
+    #save-btn:disabled { background: #aeaeb2; cursor: not-allowed; }
+    #loading { font-size: 16px; font-weight: bold; color: #666; margin: 40px 0; text-align: center; display: none; }
+  </style>
+</head>
+<body>
+
+  <h2>チュウニズム譜面傾向アンケート</h2>
+
+  <div id="login-screen">
+    <p style="font-weight:bold; margin-bottom:8px;">回答に使用するユーザー名を入力してください</p>
+    <p style="font-size:12px; color:#8e8e93; margin-top:0;">※過去に回答がある場合、自動的にデータを復元します</p>
+    <input type="text" id="user-name-input" class="input-text" placeholder="例: プレイヤー名">
+    <button type="button" class="btn-primary" onclick="startSurvey()">アンケートを開始・復元する</button>
+  </div>
+
+  <div id="loading">データを読み込み中...</div>
+
+  <div id="main-screen">
+    <div class="desc">
+      こんにちは、<span id="display-user-name" style="font-weight:bold; color:#0076f6;"></span> さん。<br>
+      変更した定数タブごとに最下部の「保存」ボタンを押すことで、何回でも小分けにして修正・上書き保存が可能です。
+    </div>
+
+    <div class="tab-container">
+      <button class="tab-btn active" onclick="switchTab('15.0')">15.0</button>
+      <button class="tab-btn" onclick="switchTab('15.1')">15.1</button>
+      <button class="tab-btn" onclick="switchTab('15.2')">15.2</button>
+      <button class="tab-btn" onclick="switchTab('15.3')">15.3</button>
+      <button class="tab-btn" onclick="switchTab('15.4')">15.4</button>
+    </div>
+
+    <div class="current-base-cost-alert">
+      現在選択中：定数 <span id="label-current-tab">15.0</span> の基準コストは【<span id="label-base-cost">16</span>】です（許容範囲: <span id="label-cost-range">14〜18</span>）
+    </div>
+
+    <div class="rule-container">
+      <div class="rule-title"> コストの割り振りルール</div>
+      <ul class="rule-list">
+        <li>定数ごとに基準となる合計コストが決まっており、それを4種類の譜面傾向（体力、鍵盤、チュウニズム力、癖）に割り振ってください。</li>
+        <li>その譜面を<strong>逆詐称</strong>または<strong>詐称</strong>だと考えている場合は、合計コストを<strong>【基準コストから ±2 まで】</strong>増減させて調整することが許容されています。</li>
+      </ul>
+    </div>
+
+    <div class="filter-container">
+      <input type="text" id="search-input" class="search-box" oninput="renderSongs()" placeholder="曲名で検索...">
+      <label class="checkbox-label">
+        <input type="checkbox" id="unanswered-only" onchange="renderSongs()"> 未回答の譜面のみを表示する
+      </label>
+    </div>
+
+    <div id="songs-wrapper"></div>
+
+    <div class="action-container">
+      <button type="button" id="save-btn" onclick="saveCurrentTab()" disabled>このページの回答を保存する</button>
+    </div>
+  </div>
+
+  <script>
+    let globalSongs = []; 
+    let currentTabStr = "15.0";
+    let currentUserName = "";
+    
+    // 定数ごとの基準コストマップ（表示更新用）
+    const baseCostMap = { "15.0": 16, "15.1": 18, "15.2": 20, "15.3": 22, "15.4": 24 };
+
+    function startSurvey() {
+      const nameInput = document.getElementById("user-name-input").value.trim();
+      if (!nameInput) { alert("ユーザー名を入力してください。"); return; }
+      
+      currentUserName = nameInput;
+      document.getElementById("login-screen").style.display = "none";
+      document.getElementById("loading").style.display = "block";
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          document.getElementById("loading").style.display = "none";
+          if (res.status === "success") {
+            globalSongs = res.songs;
+            document.getElementById("display-user-name").innerText = currentUserName;
+            document.getElementById("main-screen").style.display = "block";
+            updateBaseCostDisplay(); // 基準コスト表示を初期化
+            renderSongs(); 
+          } else {
+            alert("エラーが発生しました: " + res.message);
+            document.getElementById("login-screen").style.display = "block";
+          }
+        })
+        .withFailureHandler((err) => {
+          document.getElementById("loading").style.display = "none";
+          alert("通信エラー: " + err);
+          document.getElementById("login-screen").style.display = "block";
+        })
+        .getMasterAndUserData(currentUserName);
+    }
+
+    function switchTab(tabStr) {
+      currentTabStr = tabStr;
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.innerText === tabStr);
+      });
+      
+      document.getElementById("search-input").value = "";
+      document.getElementById("unanswered-only").checked = false;
+      
+      updateBaseCostDisplay(); // 💡 タブ切り替え時に基準コスト表示を書き換え
+      renderSongs();
+      window.scrollTo({ top: 0, behavior: 'smooth' }); 
+    }
+
+    // 💡 選択されているタブに合わせて上部の基準コストテキストを書き換える関数
+    function updateBaseCostDisplay() {
+      const base = baseCostMap[currentTabStr] || 16;
+      document.getElementById("label-current-tab").innerText = currentTabStr;
+      document.getElementById("label-base-cost").innerText = base;
+      document.getElementById("label-cost-range").innerText = `${base - 2}〜${base + 2}`;
+    }
+
+    function renderSongs() {
+      const wrapper = document.getElementById("songs-wrapper");
+      wrapper.innerHTML = "";
+      
+      const keyword = document.getElementById("search-input").value.toLowerCase().trim();
+      const isUnansweredOnly = document.getElementById("unanswered-only").checked;
+
+      const filtered = globalSongs.filter(song => {
+        if (song.constStr !== currentTabStr) return false;
+        if (keyword && song.title.toLowerCase().indexOf(keyword) === -1) return false;
+        if (isUnansweredOnly && song.total > 0) return false; 
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        wrapper.innerHTML = '<div class="empty-message">該当する譜面が見つかりません。</div>';
+        checkTabValidity();
+        return;
+      }
+
+      filtered.forEach((song) => {
+        const globalIndex = globalSongs.findIndex(g => g.title === song.title && g.diff === song.diff);
+        const minV = song.baseCost - 2;
+        const maxV = song.baseCost + 2;
+        
+        let cardClass = "song-card";
+        let statusHtml = '<div class="calc-result status-zero">未回答</div>';
+        
+        if (song.total > 0) {
+          if (song.total >= minV && song.total <= maxV) {
+            cardClass = "song-card card-ok";
+            statusHtml = '<div class="calc-result status-ok">✓ OK (適正)</div>';
+          } else {
+            cardClass = "song-card card-editing";
+            statusHtml = `<div class="calc-result status-ng">✕ 範囲外 (${song.total})</div>`;
+          }
+        }
+
+        let html = `
+          <div class="${cardClass}" id="card-${globalIndex}" data-min="${minV}" data-max="${maxV}">
+            <h3>
+              <span class="song-title-text">${song.title}</span>
+              <span class="diff-badge diff-${song.diff}">${song.diff}</span>
+            </h3>
+            <div class="song-meta">定数: <strong>${song.constant.toFixed(1)}</strong> | 基準コスト: <strong>${song.baseCost}</strong> (${minV}〜${maxV})</div>
+            
+            <div class="param-row">
+              <label>体力<br><span style="font-size:10px; color:#666; font-weight:normal;">(腕の瞬発力、持久力が必要なもの)</span></label>
+              <select class="cost-select in-tairyoku" onchange="updateCost(${globalIndex})">${getOptions(song.tairyoku)}</select>
+            </div>
+            <div class="param-row">
+              <label>鍵盤<br><span style="font-size:10px; color:#666; font-weight:normal;">(指押しの技術が必要なもの)</span></label>
+              <select class="cost-select in-kenban" onchange="updateCost(${globalIndex})">${getOptions(song.kenban)}</select>
+            </div>
+            <div class="param-row">
+              <label>チュウニズム力<br><span style="font-size:10px; color:#666; font-weight:normal;">(タプスラ、フリック、交差、縦連判定への耐性が必要なもの)</span></label>
+              <select class="cost-select in-chuni" onchange="updateCost(${globalIndex})">${getOptions(song.chuni)}</select>
+            </div>
+            <div class="param-row">
+              <label>癖<br><span style="font-size:10px; color:#666; font-weight:normal;">(長い縦連や片手トリル、ソフランや極度のリズム難等、類似譜面が少ないもの)</span></label>
+              <select class="cost-select in-kuse" onchange="updateCost(${globalIndex})">${getOptions(song.kuse)}</select>
+            </div>
+            
+            <div class="status-container">
+              <div>現在の合計: <span class="total-badge current-total">${song.total}</span></div>
+              <div class="status-box">${statusHtml}</div>
+            </div>
+          </div>
+        `;
+        wrapper.insertAdjacentHTML('beforeend', html);
+      });
+
+      checkTabValidity();
+    }
+
+    function getOptions(selectedVal) {
+      let options = "";
+      for (let c = 0; c <= 26; c++) {
+        options += `<option value="${c}" ${c === selectedVal ? 'selected' : ''}>${c}</option>`;
+      }
+      return options;
+    }
+
+    function updateCost(globalIndex) {
+      const card = document.getElementById(`card-${globalIndex}`);
+      const minV = parseInt(card.getAttribute('data-min'));
+      const maxV = parseInt(card.getAttribute('data-max'));
+      
+      const tairyoku = parseInt(card.querySelector('.in-tairyoku').value) || 0;
+      const kenban = parseInt(card.querySelector('.in-kenban').value) || 0;
+      const chuni = parseInt(card.querySelector('.in-chuni').value) || 0;
+      const kuse = parseInt(card.querySelector('.in-kuse').value) || 0;
+      
+      const total = tairyoku + kenban + chuni + kuse;
+      
+      globalSongs[globalIndex].tairyoku = tairyoku;
+      globalSongs[globalIndex].kenban = kenban;
+      globalSongs[globalIndex].chuni = chuni;
+      globalSongs[globalIndex].kuse = kuse;
+      globalSongs[globalIndex].total = total;
+      
+      card.querySelector('.current-total').innerText = total;
+      const statusBox = card.querySelector('.status-box');
+      
+      if (total === 0) {
+        card.className = "song-card";
+        statusBox.innerHTML = '<div class="calc-result status-zero">未回答</div>';
+      } else if (total >= minV && total <= maxV) {
+        card.className = "song-card card-ok";
+        statusBox.innerHTML = '<div class="calc-result status-ok">✓ OK (適正)</div>';
+      } else {
+        card.className = "song-card card-editing";
+        if (total < minV) {
+          statusBox.innerHTML = `<div class="calc-result status-ng">✕ あと ${minV - total} 不足</div>`;
+        } else {
+          statusBox.innerHTML = `<div class="calc-result status-ng">✕ ${total - maxV} オーバー</div>`;
+        }
+      }
+      
+      checkTabValidity();
+    }
+
+    function checkTabValidity() {
+      const tabSongs = globalSongs.filter(s => s.constStr === currentTabStr);
+      let canSave = true;
+      
+      for (let i = 0; i < tabSongs.length; i++) {
+        const s = tabSongs[i];
+        const minV = s.baseCost - 2;
+        const maxV = s.baseCost + 2;
+        if (s.total !== 0 && (s.total < minV || s.total > maxV)) {
+          canSave = false;
+          break;
+        }
+      }
+      
+      const btn = document.getElementById("save-btn");
+      if (canSave) {
+        btn.disabled = false;
+        btn.innerText = `定数 ${currentTabStr} の回答を保存・更新する`;
+        btn.style.background = "#34c759"; 
+      } else {
+        btn.disabled = true;
+        btn.innerText = "範囲外のエラー曲を修正すると保存できます";
+        btn.style.background = "#aeaeb2"; 
+      }
+    }
+
+    function saveCurrentTab() {
+      const btn = document.getElementById("save-btn");
+      btn.disabled = true;
+      btn.innerText = "保存処理中...";
+      
+      const currentTabSongs = globalSongs.filter(s => s.constStr === currentTabStr && s.total > 0);
+      
+      if (currentTabSongs.length === 0) {
+        alert("このページには新しく保存するデータ、または有効な回答がありません。");
+        btn.disabled = false;
+        checkTabValidity();
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (res.status === "success") {
+            alert(`定数 ${currentTabStr} の回答データを正常に保存・上書きしました！`);
+            renderSongs(); 
+          } else {
+            alert("保存エラー: " + res.message);
+            btn.disabled = false;
+          }
+        })
+        .withFailureHandler((err) => {
+          alert("通信エラーが発生しました: " + err);
+          btn.disabled = false;
+        })
+        .saveTabAnswers(currentUserName, currentTabSongs);
+    }
+  </script>
+</body>
+</html>
