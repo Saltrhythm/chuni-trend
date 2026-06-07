@@ -1,6 +1,3 @@
-// ⚠️【超重要】新しくデプロイし直したGASウェブアプリのURLをここに上書きしてください
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzUgNPPQUOWFye5g9va9ukfGAo7OQ30eBxXN6q5tSH_y7qd6DBhyghIAXrBbFGPiCEnrA/exec";
-
 let globalSongs = []; 
 let currentTabStr = "15.0";
 let currentUserName = "";
