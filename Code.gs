@@ -123,8 +123,8 @@ function saveTabAnswers(playerName, answers) {
 }
 
 /**
- * 【管理者用・手動実行】
- * 「アンケート回答」から最新データを読み込み、集計して「MasterData」を一括更新する関数
+ * 💡【管理者用・手動/トリガー実行】
+ * 「アンケート回答」から最新データを読み込み、二乗補正を加えた平均値を計算して「MasterData」を一括更新する関数
  */
 function executeAggregation() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -144,7 +144,7 @@ function executeAggregation() {
 
   Logger.log("集計処理を開始します...");
 
-  // 全ユーザーの回答を「曲名_難易度」ごとに集計するマップ
+  // 1. 全ユーザーの回答を「曲名_難易度」ごとに集計するオブジェクトを作成
   const aggMap = {};
   for (let k = 1; k < sheetData.length; k++) {
     const title = String(sheetData[k][1]).trim();
@@ -163,36 +163,77 @@ function executeAggregation() {
     aggMap[matchKey].count += 1;
   }
 
+  // 定数ごとの基準コストの定義マップ
+  const baseCostMap = { "15.0": 16, "15.1": 18, "15.2": 20, "15.3": 22, "15.4": 24 };
+
   const masterData = masterSheet.getDataRange().getValues();
   const updateRows = [];
 
-  // 各楽曲の平均値を算出
+  // 2. MasterDataの各楽曲を走査して、二乗補正後の平均値を算出
   for (let m = 1; m < masterData.length; m++) {
     const mTitle = String(masterData[m][0]).trim();
     const mDiff = String(masterData[m][1]).trim();
+    const mConstant = parseFloat(masterData[m][2]); // C列の定数を取得
     const mKey = mTitle + "_" + mDiff;
 
+    // 初期値（未回答の曲はすべて 0 表示）
     let avgTairyoku = 0, avgKenban = 0, avgChuni = 0, avgKuse = 0, avgTotal = 0;
 
     if (aggMap[mKey] && aggMap[mKey].count > 0) {
       const cnt = aggMap[mKey].count;
-      avgTairyoku = Math.round((aggMap[mKey].tairyoku / cnt) * 100) / 100;
-      avgKenban = Math.round((aggMap[mKey].kenban / cnt) * 100) / 100;
-      avgChuni = Math.round((aggMap[mKey].chuni / cnt) * 100) / 100;
-      avgKuse = Math.round((aggMap[mKey].kuse / cnt) * 100) / 100;
-      avgTotal = Math.round((aggMap[mKey].total / cnt) * 100) / 100;
+      
+      // A. まずは単純な「回答の平均値」を出す
+      const rawTairyoku = aggMap[mKey].tairyoku / cnt;
+      const rawKenban   = aggMap[mKey].kenban / cnt;
+      const rawChuni    = aggMap[mKey].chuni / cnt;
+      const rawKuse     = aggMap[mKey].kuse / cnt;
+      const rawTotal    = aggMap[mKey].total / cnt; // ユーザー回答の合計平均コスト
+
+      // B. その曲の定数から「基準コスト」を割り出す
+      let baseCost = 16;
+      if (!isNaN(mConstant)) {
+        const constStr = mConstant.toFixed(1);
+        baseCost = baseCostMap[constStr] || 16;
+      }
+
+      // C. 基準コストが 0 でなければ、各傾向コストに二乗補正をかける
+      if (baseCost > 0) {
+        // 基本の倍率 ＝ 回答の合計平均コスト / 基準コスト
+        const baseRatio = rawTotal / baseCost;
+        
+        // 【修正】倍率を4乗（^4）にする
+        const ratioSquared = Math.pow(baseRatio, 4);
+
+        // 各傾向コストに「二乗された倍率」を掛け算して補正
+        avgTairyoku = rawTairyoku * ratioSquared;
+        avgKenban   = rawKenban * ratioSquared;
+        avgChuni    = rawChuni * ratioSquared;
+        avgKuse     = rawKuse * ratioSquared;
+        
+        // 合計コストについては補正せず、ユーザーが投票した純粋な合計平均値をそのまま採用
+        avgTotal    = rawTotal; 
+      }
+
+      // D. 小数点第2位まで四捨五入して見た目を綺麗にする
+      avgTairyoku = Math.round(avgTairyoku * 100) / 100;
+      avgKenban   = Math.round(avgKenban * 100) / 100;
+      avgChuni    = Math.round(avgChuni * 100) / 100;
+      avgKuse     = Math.round(avgKuse * 100) / 100;
+      avgTotal    = Math.round(avgTotal * 100) / 100;
     }
 
+    // E〜I列に上書きする1行分のデータを作成
     updateRows.push([avgTairyoku, avgKenban, avgChuni, avgKuse, avgTotal]);
   }
 
-  // MasterDataのE列（5列目）〜I列へまとめて一括書き込み（超高速）
+  // 3. MasterDataの2行目・E列（5列目）から最下行まで、まとめて一括で値を上書き（超高速）
   if (updateRows.length > 0) {
     masterSheet.getRange(2, 5, updateRows.length, 5).setValues(updateRows);
   }
 
+  // 4. スプレッドシートに変更を強制同期
   SpreadsheetApp.flush();
-  Logger.log("手動集計が正常に完了しました！");
+  Logger.log("集計および各傾向コストの二乗補正処理が正常に完了しました！");
 }
 
 /**
