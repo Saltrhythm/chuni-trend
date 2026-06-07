@@ -97,7 +97,7 @@
 
   <div id="analytics-section">
     <h3 style="margin-top: 0; border-bottom: 2px solid #0076f6; padding-bottom: 6px; color: #1c1c1e;"> 譜面傾向ランキング分析</h3>
-    <p style="font-size: 12px; color: #666; margin-bottom: 16px;">定数枠を選択するとドロワーが開き、各傾向の4乗補正ランキングを切り替えられます。</p>
+    <p style="font-size: 12px; color: #666; margin-bottom: 16px;">定数枠を選択するとドロワーが開きます。「逆詐称/詐称度」は全曲、その他4つの傾向は上位20曲が表示されます。</p>
     
     <div id="drawer-container"></div>
   </div>
@@ -165,10 +165,35 @@
     // 定数ごとの基準コストマップ（表示更新用）
     const baseCostMap = { "15.0": 16, "15.1": 18, "15.2": 20, "15.3": 22, "15.4": 24 };
 
-    // 💡 初期読み込み時に、まずランキンググラフの土台だけ準備する（最初はデータが空なのでメッセージ表示）
+    // 💡 修正：初期読み込み時に、ユーザー名なし（全体集計データ）のランキングを自動で取得・表示する
     window.onload = function() {
-      initAnalytics([]);
+      loadAnalyticsData();
     };
+
+    /**
+     * 💡 追加：名前入力なしの全体集計データをバックグラウンドで読み込んでランキングを構築する関数
+     */
+    function loadAnalyticsData() {
+      const container = document.getElementById("drawer-container");
+      // 初回またはプレースホルダーが表示されている場合のみ読み込み中テキストを出す
+      if (!container.innerHTML || container.innerHTML.includes("ユーザー名入力後")) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#8e8e93; font-size:13px; background:#f2f2f7; border-radius:8px;">ランキングデータを読み込み中...</div>';
+      }
+
+      const url = `${GAS_URL}?action=getData&playerName=`;
+      fetch(url)
+        .then(response => response.json())
+        .then((res) => {
+          if (res.status === "success") {
+            initAnalytics(res.songs); // 全体集計データでドロワー＆ランキングを構築
+          } else {
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#ff3b30; font-size:13px;">集計データの取得に失敗しました。</div>';
+          }
+        })
+        .catch((err) => {
+          container.innerHTML = '<div style="text-align:center; padding:20px; color:#ff3b30; font-size:13px;">通信エラーによりランキングを表示できません。</div>';
+        });
+    }
 
     function startSurvey() {
       const nameInput = document.getElementById("user-name-input").value.trim();
@@ -192,7 +217,6 @@
             document.getElementById("main-screen").style.display = "block";
             updateBaseCostDisplay(); 
             renderSongs(); 
-            initAnalytics(globalSongs); // データを読み込んだのでランキング側にも反映させる
           } else {
             alert("エラーが発生しました: " + res.message);
             document.getElementById("login-screen").style.display = "block";
@@ -354,7 +378,7 @@
     }
 
     /**
-     * 💡 追加：現在選択されている定数タブの楽曲データをすべて0（未回答）にリセットする
+     * 💡 現在選択されている定数タブの楽曲データをすべて0（未回答）にリセットする
      */
     function resetCurrentTabAnswers() {
       // ユーザーへの確認アラート（誤操作防止）
@@ -412,8 +436,6 @@
       btn.disabled = true;
       btn.innerText = "保存処理中...";
       
-      // 💡 修正：一括リセット後に「すべての曲が未回答（total=0）」の状態をGASに送信して「空データを上書き（全削除）」できるように、
-      // 該当タブの全データを抽出する方式（または未回答データも含めて送る形）に最適化
       const currentTabSongs = globalSongs.filter(s => {
         const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
         return songConstStr === currentTabStr;
@@ -460,16 +482,15 @@
       const constants = ["15.0", "15.1", "15.2", "15.3", "15.4"];
       
       const metrics = [
-        { key: "total",     label: "逆詐称/詐称度", color: "rgba(255, 99, 132, 0.7)" },
+        { key: "total",    label: "逆詐称/詐称度", color: "rgba(255, 99, 132, 0.7)" },
         { key: "tairyoku",  label: "体力要求度",   color: "rgba(54, 162, 235, 0.7)" },
         { key: "kenban",    label: "鍵盤力要求度", color: "rgba(255, 206, 86, 0.7)" },
         { key: "chuni",     label: "チュウニズム力要求度", color: "rgba(75, 192, 192, 0.7)" },
         { key: "kuse",      label: "癖度",         color: "rgba(153, 102, 255, 0.7)" }
       ];
 
-      // まだデータがない場合（初期ログイン前）のプレースホルダー
       if (!songs || songs.length === 0) {
-        container.innerHTML = '<div style="text-align:center; padding:20px; color:#8e8e93; font-size:13px; background:#f2f2f7; border-radius:8px;">ユーザー名入力後に集計データが反映されます</div>';
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#ff3b30; font-size:13px; background:#f2f2f7; border-radius:8px;">有効なデータが見つかりませんでした</div>';
         return;
       }
 
@@ -528,8 +549,9 @@
 
         content.appendChild(tabContainer);
 
-        // グラフ用Canvasコンテナ（曲数に応じて高さを動的に変え、文字潰れを防ぐ）
+        // 💡 グラフ用Canvasコンテナ（初期状態は total = 全曲表示のため、全曲数に応じた高さで初期化）
         const canvasContainer = document.createElement("div");
+        canvasContainer.id = `canvas-container-${targetConst.replace('.', '_')}`;
         canvasContainer.style.position = "relative";
         canvasContainer.style.height = `${filtered.length * 28 + 50}px`;
 
@@ -545,7 +567,7 @@
     }
 
     /**
-     * 💡 選択された項目（タブ）に基づいて横向き棒グラフを再描画
+     * 💡 選択された項目（タブ）に基づいて横向き棒グラフを再描画（改良版）
      */
     function switchMetric(targetConst, metricKey, color, labelText, songs) {
       const chartId = targetConst;
@@ -554,19 +576,43 @@
       if (!canvasEl) return;
       const ctx = canvasEl.getContext("2d");
 
-      // 該当定数のデータを抽出し、指定キーの値で【降順（大きい順）】に並び替え
+      // 該当定数のデータを抽出
       const filtered = songs.filter(s => {
         const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
         return songConstStr === targetConst;
       });
-      const sorted = [...filtered].sort((a, b) => (b[metricKey] || 0) - (a[metricKey] || 0));
+      
+      // 指定キーの値で【降順（大きい順）】に並び替え
+      let sorted = [...filtered].sort((a, b) => (b[metricKey] || 0) - (a[metricKey] || 0));
+      
+      // 💡 修正：「逆詐称/詐称度 (total)」以外の場合のみ【上位20譜面のみ】に絞り込む（totalは全曲表示）
+      if (metricKey !== "total") {
+        sorted = sorted.slice(0, 20);
+      }
 
+      // 💡 修正：選択された曲数（全曲 or 20曲）に合わせてコンテナの高さを動的に変更し、余白を最適化
+      const containerEl = document.getElementById(`canvas-container-${targetConst.replace('.', '_')}`);
+      if (containerEl) {
+        containerEl.style.height = `${sorted.length * 28 + 50}px`;
+      }
+
+      // ラベルと値を生成（💡 丸め処理を行わず、9.13や12.23などの細かな実数値をそのまま正確に反映）
       const labels = sorted.map(s => `${s.title} (${s.diff})`);
       const dataValues = sorted.map(s => s[metricKey] || 0);
 
       // 既存の同じ定数のグラフを破棄
       if (activeCharts[chartId]) {
         activeCharts[chartId].destroy();
+      }
+
+      // 横軸（x軸）の範囲を動的に計算するロジック
+      const baseCost = baseCostMap[targetConst] || 16; 
+      let xMin = 0;
+      let xMax = baseCost + 2; 
+
+      if (metricKey === "total") {
+        xMin = baseCost - 2;
+        xMax = baseCost + 2;
       }
 
       // Chart.jsによる横向き棒グラフの描画
@@ -586,12 +632,29 @@
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { display: false }
+            legend: { display: false },
+            // マウスホバー/タップ時のポップアップ（ツールチップ）の数値を小数点第2位に固定して綺麗に見せる
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return ` ${labelText}: ${context.raw.toFixed(2)}`;
+                }
+              }
+            }
           },
           scales: {
             x: {
-              beginAtZero: true,
-              suggestedMax: metricKey === "total" ? 18 : undefined // 詐称度は14〜18スケールが見やすいため制限
+              min: xMin, 
+              max: xMax, 
+              ticks: {
+                stepSize: 1, // 💡 修正：目盛りを1刻み（整数）にする
+                callback: function(value) {
+                  // 💡 修正：整数値のみを軸の目盛り数値として表示（9.13等は棒の位置で正確に表現され、軸は整数に）
+                  if (Math.floor(value) === value) {
+                    return value;
+                  }
+                }
+              }
             },
             y: {
               ticks: { autoSkip: false, font: { size: 10 } }
@@ -602,7 +665,7 @@
     }
 
     /**
-     * 💡 アンケート回答画面から、最初のメイン画面（ランキング）に戻る処理
+     * アンケート回答画面から、最初のメイン画面（ランキング）に戻る処理
      */
     function backToMainScreen() {
       document.getElementById("login-screen").style.display = "block";
@@ -612,8 +675,8 @@
       // 戻った際に、入力欄の文字をそのまま残しておく
       document.getElementById("user-name-input").value = currentUserName;
       
-      // ランキンググラフを現在の最新状態データでリフレッシュ
-      initAnalytics(globalSongs);
+      // 💡 修正：ランキング画面に戻るタイミングで最新の全体集計データを再取得してリフレッシュ
+      loadAnalyticsData();
     }
   </script>
 </body>
