@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>チュウニズム譜面傾向アンケート</title>
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 16px; background: #f1f2f6; color: #1c1c1e; max-width: 600px; margin: 0 auto; }
     h2 { text-align: center; color: #0076f6; margin-bottom: 8px; }
@@ -14,16 +17,26 @@
     .rule-list { margin: 0; padding-left: 18px; font-size: 12px; color: #3a3a3c; line-height: 1.6; }
     .rule-list strong { color: #ff9500; }
     
-    /*  追加：現在選択中のタブの基準コスト表示バッジ */
+    /* 現在選択中のタブの基準コスト表示バッジ */
     .current-base-cost-alert { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 10px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 16px; }
     .current-base-cost-alert span { font-size: 18px; color: #0284c7; margin: 0 4px; }
 
-    /* ログイン画面 */
+    /* ログイン（初期）画面 */
     #login-screen { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; margin-top: 40px; }
     .input-text { width: 80%; padding: 12px; font-size: 16px; border: 1px solid #c7c7cc; border-radius: 8px; margin-bottom: 16px; text-align: center; }
     .btn-primary { width: 85%; padding: 14px; font-size: 16px; font-weight: bold; background: #0076f6; color: white; border: none; border-radius: 8px; cursor: pointer; }
     
-    /* メイン画面とタブUI */
+    /* 📊 傾向分析ランキング（追加：ドロワーのスタイル） */
+    #analytics-section { margin-top: 40px; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .drawer-wrapper { border: 1px solid #e5e5ea; border-radius: 8px; margin-bottom: 12px; overflow: hidden; background: #fff; }
+    .drawer-header { width: 100%; background: #f2f2f7; padding: 14px; text-align: left; border: none; font-size: 14px; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: #1c1c1e; }
+    .drawer-header:hover { background: #e5e5ea; }
+    .drawer-content { display: none; padding: 14px; border-top: 1px solid #e5e5ea; }
+    .tab-button-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .tab-btn-metric { flex: 1; min-width: 90px; padding: 6px 10px; border: 1px solid #c7c7cc; background: #fff; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; color: #3a3a3c; text-align: center; transition: all 0.2s; }
+    .tab-btn-metric.active { background: #0076f6; color: white; border-color: #0076f6; }
+
+    /* アンケート回答画面とタブUI */
     #main-screen { display: none; }
     .tab-container { display: flex; justify-content: space-between; background: #e5e5ea; padding: 4px; border-radius: 10px; margin-bottom: 12px; position: sticky; top: 0; z-index: 100; }
     .tab-btn { flex: 1; padding: 10px 0; font-size: 14px; font-weight: bold; text-align: center; background: transparent; border: none; border-radius: 8px; cursor: pointer; color: #666; transition: all 0.2s; }
@@ -77,9 +90,20 @@
     <button type="button" class="btn-primary" onclick="startSurvey()">アンケートを開始・復元する</button>
   </div>
 
+  <div id="analytics-section">
+    <h3 style="margin-top: 0; border-bottom: 2px solid #0076f6; padding-bottom: 6px; color: #1c1c1e;"> 譜面傾向ランキング分析</h3>
+    <p style="font-size: 12px; color: #666; margin-bottom: 16px;">定数枠を選択するとドロワーが開き、各傾向の4乗補正ランキングを切り替えられます。</p>
+    
+    <div id="drawer-container"></div>
+  </div>
+
   <div id="loading">データを読み込み中...</div>
 
   <div id="main-screen">
+    <button type="button" onclick="backToMainScreen()" style="width:100%; padding:10px; font-size:14px; font-weight:bold; background:#636366; color:white; border:none; border-radius:8px; cursor:pointer; margin-bottom:14px;">
+      ⬅ 名前入力・ランキング画面に戻る
+    </button>
+
     <div class="desc">
       こんにちは、<span id="display-user-name" style="font-weight:bold; color:#0076f6;"></span> さん。<br>
       変更した定数タブごとに最下部の「保存」ボタンを押すことで、何回でも小分けにして修正・上書き保存が可能です。
@@ -120,12 +144,21 @@
   </div>
 
   <script>
+    // 【重要】あなたのGASウェブアプリのデプロイURLをここに貼り付けてください
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzUgNPPQUOWFye5g9va9ukfGAo7OQ30eBxXN6q5tSH_y7qd6DBhyghIAXrBbFGPiCEnrA/exec";
+
     let globalSongs = []; 
     let currentTabStr = "15.0";
     let currentUserName = "";
+    const activeCharts = {}; // チャートインスタンス保持用
     
     // 定数ごとの基準コストマップ（表示更新用）
     const baseCostMap = { "15.0": 16, "15.1": 18, "15.2": 20, "15.3": 22, "15.4": 24 };
+
+    // 💡 初期読み込み時に、まずランキンググラフの土台だけ準備する（最初はデータが空なのでメッセージ表示）
+    window.onload = function() {
+      initAnalytics([]);
+    };
 
     function startSurvey() {
       const nameInput = document.getElementById("user-name-input").value.trim();
@@ -133,28 +166,35 @@
       
       currentUserName = nameInput;
       document.getElementById("login-screen").style.display = "none";
+      document.getElementById("analytics-section").style.display = "none"; // 画面遷移時にランキングを隠す
       document.getElementById("loading").style.display = "block";
 
-      google.script.run
-        .withSuccessHandler((res) => {
+      // 💡 API通信方式に変更 (fetchを使用)
+      const url = `${GAS_URL}?action=getData&playerName=${encodeURIComponent(currentUserName)}`;
+      
+      fetch(url)
+        .then(response => response.json())
+        .then((res) => {
           document.getElementById("loading").style.display = "none";
           if (res.status === "success") {
             globalSongs = res.songs;
             document.getElementById("display-user-name").innerText = currentUserName;
             document.getElementById("main-screen").style.display = "block";
-            updateBaseCostDisplay(); // 基準コスト表示を初期化
+            updateBaseCostDisplay(); 
             renderSongs(); 
+            initAnalytics(globalSongs); // データを読み込んだのでランキング側にも反映させる
           } else {
             alert("エラーが発生しました: " + res.message);
             document.getElementById("login-screen").style.display = "block";
+            document.getElementById("analytics-section").style.display = "block";
           }
         })
-        .withFailureHandler((err) => {
+        .catch((err) => {
           document.getElementById("loading").style.display = "none";
           alert("通信エラー: " + err);
           document.getElementById("login-screen").style.display = "block";
-        })
-        .getMasterAndUserData(currentUserName);
+          document.getElementById("analytics-section").style.display = "block";
+        });
     }
 
     function switchTab(tabStr) {
@@ -166,12 +206,11 @@
       document.getElementById("search-input").value = "";
       document.getElementById("unanswered-only").checked = false;
       
-      updateBaseCostDisplay(); // 💡 タブ切り替え時に基準コスト表示を書き換え
+      updateBaseCostDisplay(); 
       renderSongs();
       window.scrollTo({ top: 0, behavior: 'smooth' }); 
     }
 
-    // 💡 選択されているタブに合わせて上部の基準コストテキストを書き換える関数
     function updateBaseCostDisplay() {
       const base = baseCostMap[currentTabStr] || 16;
       document.getElementById("label-current-tab").innerText = currentTabStr;
@@ -187,7 +226,9 @@
       const isUnansweredOnly = document.getElementById("unanswered-only").checked;
 
       const filtered = globalSongs.filter(song => {
-        if (song.constStr !== currentTabStr) return false;
+        // MasterDataから渡されるデータの定数キーを合わせる
+        const songConstStr = song.constStr || (song.constant ? song.constant.toFixed(1) : "");
+        if (songConstStr !== currentTabStr) return false;
         if (keyword && song.title.toLowerCase().indexOf(keyword) === -1) return false;
         if (isUnansweredOnly && song.total > 0) return false; 
         return true;
@@ -302,7 +343,10 @@
     }
 
     function checkTabValidity() {
-      const tabSongs = globalSongs.filter(s => s.constStr === currentTabStr);
+      const tabSongs = globalSongs.filter(s => {
+        const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
+        return songConstStr === currentTabStr;
+      });
       let canSave = true;
       
       for (let i = 0; i < tabSongs.length; i++) {
@@ -332,7 +376,10 @@
       btn.disabled = true;
       btn.innerText = "保存処理中...";
       
-      const currentTabSongs = globalSongs.filter(s => s.constStr === currentTabStr && s.total > 0);
+      const currentTabSongs = globalSongs.filter(s => {
+        const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
+        return songConstStr === currentTabStr && s.total > 0;
+      });
       
       if (currentTabSongs.length === 0) {
         alert("このページには新しく保存するデータ、または有効な回答がありません。");
@@ -341,8 +388,12 @@
         return;
       }
 
-      google.script.run
-        .withSuccessHandler((res) => {
+      // 💡 API通信方式に変更 (fetchを使用)
+      const url = `${GAS_URL}?action=save&playerName=${encodeURIComponent(currentUserName)}&answers=${encodeURIComponent(JSON.stringify(currentTabSongs))}`;
+
+      fetch(url)
+        .then(response => response.json())
+        .then((res) => {
           if (res.status === "success") {
             alert(`定数 ${currentTabStr} の回答データを正常に保存・上書きしました！`);
             renderSongs(); 
@@ -351,11 +402,180 @@
             btn.disabled = false;
           }
         })
-        .withFailureHandler((err) => {
+        .catch((err) => {
           alert("通信エラーが発生しました: " + err);
           btn.disabled = false;
-        })
-        .saveTabAnswers(currentUserName, currentTabSongs);
+        });
+    }
+
+    /* =========================================================================
+     * 📊 傾向分析ランキング（ドロワー＆横向き棒グラフ）制御ロジック
+     * ========================================================================= */
+    
+    /**
+     * 💡 ドロワーメニューの初期化・全自動生成
+     */
+    function initAnalytics(songs) {
+      const container = document.getElementById("drawer-container");
+      container.innerHTML = ""; // 初期化
+
+      const constants = ["15.0", "15.1", "15.2", "15.3", "15.4"];
+      
+      const metrics = [
+        { key: "total",     label: "逆詐称/詐称度", color: "rgba(255, 99, 132, 0.7)" },
+        { key: "tairyoku",  label: "体力要求度",   color: "rgba(54, 162, 235, 0.7)" },
+        { key: "kenban",    label: "鍵盤力要求度", color: "rgba(255, 206, 86, 0.7)" },
+        { key: "chuni",     label: "チュウニズム力要求度", color: "rgba(75, 192, 192, 0.7)" },
+        { key: "kuse",      label: "癖度",         color: "rgba(153, 102, 255, 0.7)" }
+      ];
+
+      // まだデータがない場合（初期ログイン前）のプレースホルダー
+      if (!songs || songs.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#8e8e93; font-size:13px; background:#f2f2f7; border-radius:8px;">ユーザー名入力後に集計データが反映されます</div>';
+        return;
+      }
+
+      constants.forEach(targetConst => {
+        // 定数が一致する曲のみ抽出
+        const filtered = songs.filter(s => {
+          const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
+          return songConstStr === targetConst;
+        });
+        
+        if (filtered.length === 0) return;
+
+        // ドロワー外枠
+        const wrapper = document.createElement("div");
+        wrapper.className = "drawer-wrapper";
+
+        // ドロワーヘッダー（開閉ボタン）
+        const header = document.createElement("button");
+        header.className = "drawer-header";
+        header.innerHTML = `<span>定数枠 ${targetConst} (${filtered.length}曲)</span> <span>🔽</span>`;
+        
+        // ドロワー開閉用の中身コンテナ
+        const content = document.createElement("div");
+        content.className = "drawer-content";
+        content.id = `drawer-content-${targetConst.replace('.', '_')}`;
+
+        // ヘッダークリック時のイベント
+        header.onclick = () => {
+          const isVisible = content.style.display === "block";
+          content.style.display = isVisible ? "none" : "block";
+          header.querySelector("span:last-child").innerText = isVisible ? "🔽" : "🔼";
+          
+          // 開いた時に、まだ一度もグラフが描かれてなければ初期表示(total)をレンダリング
+          if (!isVisible && !activeCharts[targetConst]) {
+            switchMetric(targetConst, 'total', metrics[0].color, metrics[0].label, songs);
+          }
+        };
+
+        // 5つの項目切り替え用ボタン（タブ）の生成
+        const tabContainer = document.createElement("div");
+        tabContainer.className = "tab-button-container";
+
+        metrics.forEach((metric, index) => {
+          const btn = document.createElement("button");
+          btn.className = `tab-btn-metric tab-btn-${targetConst.replace('.', '_')}`;
+          if (index === 0) btn.classList.add("active");
+          btn.innerText = metric.label;
+          
+          btn.onclick = () => {
+            document.querySelectorAll(`.tab-btn-${targetConst.replace('.', '_')}`).forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            switchMetric(targetConst, metric.key, metric.color, metric.label, songs);
+          };
+          tabContainer.appendChild(btn);
+        });
+
+        content.appendChild(tabContainer);
+
+        // グラフ用Canvasコンテナ（曲数に応じて高さを動的に変え、文字潰れを防ぐ）
+        const canvasContainer = document.createElement("div");
+        canvasContainer.style.position = "relative";
+        canvasContainer.style.height = `${filtered.length * 28 + 50}px`;
+
+        const canvas = document.createElement("canvas");
+        canvas.id = `canvas-${targetConst.replace('.', '_')}`;
+        canvasContainer.appendChild(canvas);
+        content.appendChild(canvasContainer);
+
+        wrapper.appendChild(header);
+        wrapper.appendChild(content);
+        container.appendChild(wrapper);
+      });
+    }
+
+    /**
+     * 💡 選択された項目（タブ）に基づいて横向き棒グラフを再描画
+     */
+    function switchMetric(targetConst, metricKey, color, labelText, songs) {
+      const chartId = targetConst;
+      const canvasId = `canvas-${targetConst.replace('.', '_')}`;
+      const canvasEl = document.getElementById(canvasId);
+      if (!canvasEl) return;
+      const ctx = canvasEl.getContext("2d");
+
+      // 該当定数のデータを抽出し、指定キーの値で【降順（大きい順）】に並び替え
+      const filtered = songs.filter(s => {
+        const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
+        return songConstStr === targetConst;
+      });
+      const sorted = [...filtered].sort((a, b) => (b[metricKey] || 0) - (a[metricKey] || 0));
+
+      const labels = sorted.map(s => `${s.title} (${s.diff})`);
+      const dataValues = sorted.map(s => s[metricKey] || 0);
+
+      // 既存の同じ定数のグラフを破棄
+      if (activeCharts[chartId]) {
+        activeCharts[chartId].destroy();
+      }
+
+      // Chart.jsによる横向き棒グラフの描画
+      activeCharts[chartId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: dataValues,
+            backgroundColor: color,
+            borderColor: color.replace("0.7", "1.0"),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          indexAxis: 'y', // 横向き
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              suggestedMax: metricKey === "total" ? 18 : undefined // 詐称度は14〜18スケールが見やすいため制限
+            },
+            y: {
+              ticks: { autoSkip: false, font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    /**
+     * 💡 アンケート回答画面から、最初のメイン画面（ランキング）に戻る処理
+     */
+    function backToMainScreen() {
+      document.getElementById("login-screen").style.display = "block";
+      document.getElementById("analytics-section").style.display = "block"; // ランキングセクションを再表示
+      document.getElementById("main-screen").style.display = "none";     // アンケート画面を非表示
+      
+      // 戻った際に、入力欄の文字をそのまま残しておく
+      document.getElementById("user-name-input").value = currentUserName;
+      
+      // ランキンググラフを現在の最新状態データでリフレッシュ
+      initAnalytics(globalSongs);
     }
   </script>
 </body>
