@@ -265,7 +265,7 @@ function checkTabValidity() {
   }
 }
 
-// 9. API経由で現在の定数枠をスプレッドシートに保存
+// 9. 💡【大幅改良】POST通信経由で現在の定数枠をスプレッドシートに安全に保存
 function saveCurrentTab() {
   const btn = document.getElementById("save-btn");
   btn.disabled = true;
@@ -283,9 +283,19 @@ function saveCurrentTab() {
     return;
   }
 
-  const url = `${GAS_URL}?action=save&playerName=${encodeURIComponent(currentUserName)}&answers=${encodeURIComponent(JSON.stringify(currentTabSongs))}`;
+  // 送信するデータをオブジェクトにまとめる
+  const payload = {
+    action: "save",
+    playerName: currentUserName,
+    answers: currentTabSongs // JSON文字列にせず、配列のまま渡します
+  };
 
-  fetch(url)
+  // URL制限を回避するため、fetchの第2引数でPOST通信を指定
+  fetch(GAS_URL, {
+    method: "POST",
+    contentType: "application/json",
+    body: JSON.stringify(payload)
+  })
     .then(response => response.json())
     .then((res) => {
       if (res.status === "success") {
@@ -294,11 +304,13 @@ function saveCurrentTab() {
       } else {
         alert("保存エラー: " + res.message);
         btn.disabled = false;
+        checkTabValidity();
       }
     })
     .catch((err) => {
       alert("通信エラーが発生しました: " + err);
       btn.disabled = false;
+      checkTabValidity();
     });
 }
 
@@ -400,18 +412,16 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
   
   const baseCost = baseCostMap[targetConst] || 16;
 
-  // 💡 データのソートとマッピング
+  // データのソートとマッピング
   let sorted = [...filtered];
   
   if (metricKey === "total") {
-    // 逆詐称/詐称度の場合は「合計 - 基準コスト（差分）」が大きい順にソート
     sorted.sort((a, b) => {
       const diffA = (a.total || 0) - (a.baseCost || baseCost);
       const diffB = (b.total || 0) - (b.baseCost || baseCost);
       return diffB - diffA;
     });
   } else {
-    // その他の項目は従来通り要求度が高い順にソートし、上位20件に絞る
     sorted.sort((a, b) => (b[metricKey] || 0) - (a[metricKey] || 0));
     sorted = sorted.slice(0, 20);
   }
@@ -421,16 +431,13 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
     containerEl.style.height = `${sorted.length * 28 + 50}px`;
   }
 
-  // スマホでの表示潰れを防ぐためグラフ内は10文字に制限
   const labels = sorted.map(s => {
     const shortTitle = s.title.length > 10 ? s.title.substring(0, 10) + "..." : s.title;
     return `${shortTitle} (${s.diff})`;
   });
 
-  // 💡 グラフに渡す数値を計算
   const dataValues = sorted.map(s => {
     if (metricKey === "total") {
-      // 逆詐称/詐称度のときは「回答の合計 - その曲の基準コスト」で -2 ～ +2 のデータを生成
       return (s.total || 0) - (s.baseCost || baseCost);
     }
     return s[metricKey] || 0;
@@ -440,13 +447,12 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
     activeCharts[chartId].destroy();
   }
 
-  // 💡 横軸（X軸）の範囲設定
   let xMin = 0;
   let xMax = baseCost + 2; 
 
   if (metricKey === "total") {
-    xMin = -2; // 基準より低い（逆詐称）
-    xMax = 2;  // 基準より高い（詐称）
+    xMin = -2; 
+    xMax = 2;  
   }
 
   activeCharts[chartId] = new Chart(ctx, {
@@ -473,7 +479,6 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
               return `${sorted[index].title} (${sorted[index].diff})`;
             },
             label: function(context) {
-              // 💡 ツールチップの表示テキストも調整
               const val = context.raw;
               if (metricKey === "total") {
                 const sign = val > 0 ? "+" : "";
@@ -489,7 +494,7 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
           min: xMin, 
           max: xMax, 
           ticks: {
-            stepSize: 1, // 横軸は整数目盛り（-2, -1, 0, 1, 2）
+            stepSize: 1, 
             callback: function(value) {
               if (Math.floor(value) === value) return value;
             }
