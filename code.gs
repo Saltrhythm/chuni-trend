@@ -1,12 +1,39 @@
 /**
- * Webアンケートページにアクセスした際に画面（Index.html）を表示する
+ * 💡【最重要】GitHub Pages（API通信）からのアクセスを受け付ける窓口
  */
-function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-      .evaluate()
-      .setTitle('チュウニズム譜面傾向アンケート')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+function doGet(e) {
+  // パラメータがない場合は、念のためこれまでのHTML表示（単体動作確認用）を行う
+  if (!e || !e.parameter || !e.parameter.action) {
+    return HtmlService.createTemplateFromFile('index')
+        .evaluate()
+        .setTitle('チュウニズム譜面傾向アンケート')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  const action = e.parameter.action;
+  let result = { status: "error", message: "無効なアクションです" };
+
+  try {
+    // 1. データの読み込み・復元リクエストの場合
+    if (action === "getData") {
+      const playerName = e.parameter.playerName;
+      result = getMasterAndUserData(playerName);
+    } 
+    // 2. 回答データの保存リクエストの場合
+    else if (action === "save") {
+      const playerName = e.parameter.playerName;
+      const answersJson = e.parameter.answers;
+      const answers = JSON.parse(answersJson);
+      result = saveTabAnswers(playerName, answers);
+    }
+  } catch (err) {
+    result = { status: "error", message: err.toString() };
+  }
+
+  // 💡 GitHub Pages側でエラー（CORSエラー）を出さずにデータを受け取れる形式（JSON）で返却する
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
@@ -30,17 +57,25 @@ function getMasterAndUserData(playerName) {
     
     if (!isNaN(constant) && constant >= 15.0 && constant <= 15.4) {
       const constStr = constant.toFixed(1);
+      
+      // 💡 グラフでソートするために、MasterDataにすでに計算済みの集計値（E〜I列）があれば一緒に読み込むように改良
       songs.push({
         title: title,
         diff: diff,
         constant: constant,
         constStr: constStr,
         baseCost: baseCostMap[constStr] || 16,
-        tairyoku: 0, kenban: 0, chuni: 0, kuse: 0, total: 0
+        // MasterDataの E列:体力, F列:鍵盤, G列:チュウニ, H列:癖, I列:合計コスト平均
+        tairyoku: parseFloat(masterData[i][4]) || 0, 
+        kenban: parseFloat(masterData[i][5]) || 0, 
+        chuni: parseFloat(masterData[i][6]) || 0, 
+        kuse: parseFloat(masterData[i][7]) || 0, 
+        total: parseFloat(masterData[i][8]) || 0
       });
     }
   }
 
+  // 「アンケート回答」シートから、このユーザーがすでに回答しているデータを上書き（回答の復元用）
   const answerSheet = ss.getSheetByName("アンケート回答");
   if (answerSheet && answerSheet.getLastRow() > 1) {
     const ansData = answerSheet.getDataRange().getValues();
@@ -61,6 +96,7 @@ function getMasterAndUserData(playerName) {
     songs.forEach(song => {
       const key = song.title + "_" + song.diff;
       if (userAnsMap[key]) {
+        // 💡 ユーザーの入力用画面には、MasterDataの平均値ではなく、そのユーザー自身が「過去に入力した生コスト値」をセットする
         song.tairyoku = userAnsMap[key].tairyoku;
         song.kenban = userAnsMap[key].kenban;
         song.chuni = userAnsMap[key].chuni;
@@ -124,7 +160,7 @@ function saveTabAnswers(playerName, answers) {
 
 /**
  * 💡【管理者用・手動/トリガー実行】
- * 「アンケート回答」から最新データを読み込み、二乗補正を加えた平均値を計算して「MasterData」を一括更新する関数
+ * 「アンケート回答」から最新データを読み込み、4乗補正を加えた平均値を計算して「MasterData」を一括更新する関数
  */
 function executeAggregation() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -169,11 +205,11 @@ function executeAggregation() {
   const masterData = masterSheet.getDataRange().getValues();
   const updateRows = [];
 
-  // 2. MasterDataの各楽曲を走査して、二乗補正後の平均値を算出
+  // 2. MasterDataの各楽曲を走査して、4乗補正後の平均値を算出
   for (let m = 1; m < masterData.length; m++) {
     const mTitle = String(masterData[m][0]).trim();
     const mDiff = String(masterData[m][1]).trim();
-    const mConstant = parseFloat(masterData[m][2]); // C列の定数を取得
+    const mConstant = parseFloat(masterData[m][2]); 
     const mKey = mTitle + "_" + mDiff;
 
     // 初期値（未回答の曲はすべて 0 表示）
@@ -196,21 +232,21 @@ function executeAggregation() {
         baseCost = baseCostMap[constStr] || 16;
       }
 
-      // C. 基準コストが 0 でなければ、各傾向コストに二乗補正をかける
+      // C. 基準コストが 0 でなければ、各傾向コストに「4乗補正」をかける
       if (baseCost > 0) {
         // 基本の倍率 ＝ 回答の合計平均コスト / 基準コスト
         const baseRatio = rawTotal / baseCost;
         
-        // 【修正】倍率を4乗（^4）にする
-        const ratioSquared = Math.pow(baseRatio, 4);
+        // 【4乗補正（^4）】尖った個性を引き立たせる
+        const ratioExponentiated = Math.pow(baseRatio, 4);
 
-        // 各傾向コストに「二乗された倍率」を掛け算して補正
-        avgTairyoku = rawTairyoku * ratioSquared;
-        avgKenban   = rawKenban * ratioSquared;
-        avgChuni    = rawChuni * ratioSquared;
-        avgKuse     = rawKuse * ratioSquared;
+        // 各傾向コストに「4乗された倍率」を掛け算して補正
+        avgTairyoku = rawTairyoku * ratioExponentiated;
+        avgKenban   = rawKenban * ratioExponentiated;
+        avgChuni    = rawChuni * ratioExponentiated;
+        avgKuse     = rawKuse * ratioExponentiated;
         
-        // 合計コストについては補正せず、ユーザーが投票した純粋な合計平均値をそのまま採用
+        // 合計コストについては補正せず、純粋な合計平均値をそのまま採用
         avgTotal    = rawTotal; 
       }
 
@@ -233,7 +269,7 @@ function executeAggregation() {
 
   // 4. スプレッドシートに変更を強制同期
   SpreadsheetApp.flush();
-  Logger.log("集計および各傾向コストの二乗補正処理が正常に完了しました！");
+  Logger.log("集計および各傾向コストの4乗補正処理が正常に完了しました！");
 }
 
 /**
@@ -241,7 +277,7 @@ function executeAggregation() {
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu(' アンケート管理')
+  ui.createMenu('アンケート管理')
     .addItem('最新の回答を集計する', 'executeAggregation')
     .addToUi();
 }
