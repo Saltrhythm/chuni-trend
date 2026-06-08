@@ -33,7 +33,7 @@ function reverseAndAdjustTabButtons() {
   
   buttons.forEach(btn => {
     // タブの文字サイズを大きくし、上下の余白（パディング）を広げて縦幅を伸ばす
-    btn.style.fontSize = "18px";
+    btn.style.fontSize = "16px";
     btn.style.padding = "10px 12px";
     btn.style.fontWeight = "bold";
     
@@ -48,7 +48,8 @@ function loadAnalyticsData() {
     container.innerHTML = '<div style="text-align:center; padding:20px; color:#8e8e93; font-size:12px; background:#f2f2f7; border-radius:8px;">ランキングデータを読み込み中...</div>';
   }
 
-  const url = `${GAS_URL}?action=getData&playerName=`;
+  // 💡 URLの末尾に毎回変わるタイムスタンプ（現在時刻のミリ秒）を付加してキャッシュを回避
+  const url = `${GAS_URL}?action=getData&playerName=&_=${Date.now()}`;
   fetch(url)
     .then(response => response.json())
     .then((res) => {
@@ -73,7 +74,8 @@ function startSurvey() {
   document.getElementById("analytics-section").style.display = "none"; 
   document.getElementById("loading").style.display = "block";
 
-  const url = `${GAS_URL}?action=getData&playerName=${encodeURIComponent(currentUserName)}`;
+  // 💡 URLの末尾に毎回変わるタイムスタンプ（現在時刻のミリ秒）を付加してキャッシュを回避
+  const url = `${GAS_URL}?action=getData&playerName=${encodeURIComponent(currentUserName)}&_=${Date.now()}`;
   
   fetch(url)
     .then(response => response.json())
@@ -465,7 +467,7 @@ function initAnalytics(songs) {
   container.appendChild(totalWrapper);
 
 
-  // 親ドロワーによる難易度帯の階層化定義（「定数枠：」の文言をカット）
+  // 親ドロワーによる難易度帯の階層化定義
   const parentGroups = [
     { label: "15+ (15.5〜15.7)", constants: ["15.7", "15.6", "15.5"] },
     { label: "15 (15.0〜15.4)",   constants: ["15.4", "15.3", "15.2", "15.1", "15.0"] },
@@ -504,7 +506,7 @@ function initAnalytics(songs) {
       pHeader.querySelector("span:last-child").innerText = isVisible ? "▼" : "▲";
     };
 
-    // 子アコーディオン群の生成（各定数ごと、「定数枠」の文言をカット）
+    // 子アコーディオン群の生成（各定数ごと）
     group.constants.forEach(targetConst => {
       const filtered = songs.filter(s => {
         const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
