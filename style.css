@@ -34,8 +34,34 @@ h2 { text-align: center; color: #0076f6; margin-bottom: 8px; font-size: 20px; }
 
 /* アンケート回答画面とタブUI */
 #main-screen { display: none; }
-.tab-container { display: flex; justify-content: space-between; background: #e5e5ea; padding: 4px; border-radius: 10px; margin-bottom: 12px; position: sticky; top: 0; z-index: 100; gap: 2px; }
-.tab-btn { flex: 1; padding: 10px 0; font-size: 13px; font-weight: bold; text-align: center; background: transparent; border: none; border-radius: 6px; cursor: pointer; color: #666; transition: all 0.2s; }
+
+/* 💡 タブが10個に増えたため、wrapさせて5列×2行に美しく並ぶように大改修 */
+.tab-container { 
+  display: flex; 
+  flex-wrap: wrap; 
+  background: #e5e5ea; 
+  padding: 4px; 
+  border-radius: 10px; 
+  margin-bottom: 12px; 
+  position: sticky; 
+  top: 0; 
+  z-index: 100; 
+  gap: 4px 2px; 
+}
+.tab-btn { 
+  flex: 1; 
+  min-width: calc(20% - 4px); /* 1行に5個綺麗に並ぶ設定 */
+  padding: 8px 0; 
+  font-size: 12px; 
+  font-weight: bold; 
+  text-align: center; 
+  background: transparent; 
+  border: none; 
+  border-radius: 6px; 
+  cursor: pointer; 
+  color: #666; 
+  transition: all 0.2s; 
+}
 .tab-btn.active { background: white; color: #0076f6; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
 /* フィルター・検索エリア */
@@ -84,9 +110,11 @@ h2 { text-align: center; color: #0076f6; margin-bottom: 8px; font-size: 20px; }
   body { padding: 6px; }
   h2 { font-size: 18px; }
   .song-card { padding: 10px; margin-bottom: 8px; }
-  /* スマホでは縦幅を節約するため補足説明文を非表示にする */
   .param-desc { display: none; }
   .param-row { margin: 4px 0; padding-bottom: 4px; }
   .param-row label { font-size: 13px; }
-  .tab-btn { padding: 8px 0; font-size: 12px; }
+  
+  /* 💡 スマホ表示でも5ボタン×2行が綺麗に収まるようフォントとパディングを極小調整 */
+  .tab-container { padding: 2px; gap: 2px; }
+  .tab-btn { padding: 6px 0; font-size: 11px; min-width: calc(20% - 2px); }
 }
