@@ -94,7 +94,7 @@ function updateBaseCostDisplay() {
   document.getElementById("label-cost-range").innerText = `${base - 2}〜${base + 2}`;
 }
 
-// 5. 楽曲カード一覧を画面に出力（検索・未回答フィルタ反映）
+// 5. 楽曲カード一覧を画面に出力（検索・未回答フィルタ反映 ＋ 読み込み時自動判定付き）
 function renderSongs() {
   const wrapper = document.getElementById("songs-wrapper");
   wrapper.innerHTML = "";
@@ -166,6 +166,14 @@ function renderSongs() {
       </div>
     `;
     wrapper.insertAdjacentHTML('beforeend', html);
+  });
+
+  // 💡【追加】画面に出力されたアクティブなカードすべてに対して、初期判定を強制実行する
+  filtered.forEach(song => {
+    const globalIndex = globalSongs.findIndex(g => g.title === song.title && g.diff === song.diff);
+    if (globalIndex !== -1) {
+      updateCost(globalIndex); 
+    }
   });
 
   checkTabValidity();
