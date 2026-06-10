@@ -1,19 +1,19 @@
-const GAS_URL = "https://script.google.com/macros/s/AKfycbyZ9uEqIEcxIp0oavqNjTImIXTwpMl7VGW4yMkwodCKwBRWH7ghuWlXaoXm1sa9Kmm-/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyxIZf5g2BpRbAIziFQf0VwT6hIlxZ9Y6rkGMA4SR9jD_xjcYEVTfnzpqvLFVqzCLuv6Q/exec";
 
-let globalSongs = []; 
+let globalSongs = [];
 let currentTabStr = "15.7"; // 初期表示を15.7（最高難易度）に設定
 let currentUserName = "";
 const activeCharts = {}; // チャートインスタンス保持用
 
 // 14.8〜15.7 までの基準コストマップ
-const baseCostMap = { 
-  "14.8": 12, "14.9": 14, 
-  "15.0": 16, "15.1": 18, "15.2": 20, "15.3": 22, "15.4": 24, 
-  "15.5": 30, "15.6": 36, "15.7": 42 
+const baseCostMap = {
+  "14.8": 12, "14.9": 14,
+  "15.0": 16, "15.1": 18, "15.2": 20, "15.3": 22, "15.4": 24,
+  "15.5": 30, "15.6": 36, "15.7": 42
 };
 
 // ページを開いた瞬間に実行
-window.onload = function() {
+window.onload = function () {
   reverseAndAdjustTabButtons(); // タブの並び替えとサイズ・デザインの調整を同時に実行
   loadAnalyticsData();
 };
@@ -23,20 +23,20 @@ function reverseAndAdjustTabButtons() {
   const buttons = Array.from(document.querySelectorAll(".tab-btn"));
   if (buttons.length === 0) return;
   const parent = buttons[0].parentNode;
-  
+
   // 15.7 から 14.8 の降順に並び替え
   buttons.sort((a, b) => {
     const tabA = parseFloat(a.getAttribute('data-tab')) || 0;
     const tabB = parseFloat(b.getAttribute('data-tab')) || 0;
     return tabB - tabA;
   });
-  
+
   buttons.forEach(btn => {
     // タブの文字サイズを大きくし、上下の余白（パディング）を広げて縦幅を伸ばす
     btn.style.fontSize = "16px";
     btn.style.padding = "10px 12px";
     btn.style.fontWeight = "bold";
-    
+
     parent.appendChild(btn);
   });
 }
@@ -54,7 +54,7 @@ function loadAnalyticsData() {
     .then(response => response.json())
     .then((res) => {
       if (res.status === "success") {
-        initAnalytics(res.songs); 
+        initAnalytics(res.songs);
       } else {
         container.innerHTML = '<div style="text-align:center; padding:20px; color:#ff3b30; font-size:12px;">集計データの取得に失敗しました。</div>';
       }
@@ -68,15 +68,15 @@ function loadAnalyticsData() {
 function startSurvey() {
   const nameInput = document.getElementById("user-name-input").value.trim();
   if (!nameInput) { alert("ユーザー名を入力してください。"); return; }
-  
+
   currentUserName = nameInput;
   document.getElementById("login-screen").style.display = "none";
-  document.getElementById("analytics-section").style.display = "none"; 
+  document.getElementById("analytics-section").style.display = "none";
   document.getElementById("loading").style.display = "block";
 
   // 💡 URLの末尾に毎回変わるタイムスタンプ（現在時刻のミリ秒）を付加してキャッシュを回避
   const url = `${GAS_URL}?action=getData&playerName=${encodeURIComponent(currentUserName)}&_=${Date.now()}`;
-  
+
   fetch(url)
     .then(response => response.json())
     .then((res) => {
@@ -85,9 +85,9 @@ function startSurvey() {
         globalSongs = res.songs;
         document.getElementById("display-user-name").innerText = currentUserName;
         document.getElementById("main-screen").style.display = "block";
-        
+
         // タブ選択の状態、基準コストの表示、楽曲の描画を初期値（15.7）で同期
-        switchTab(currentTabStr); 
+        switchTab(currentTabStr);
       } else {
         alert("エラーが発生しました: " + res.message);
         document.getElementById("login-screen").style.display = "block";
@@ -108,13 +108,13 @@ function switchTab(tabStr) {
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.classList.toggle("active", btn.getAttribute('data-tab') === tabStr);
   });
-  
+
   document.getElementById("search-input").value = "";
   document.getElementById("unanswered-only").checked = false;
-  
-  updateBaseCostDisplay(); 
+
+  updateBaseCostDisplay();
   renderSongs();
-  window.scrollTo({ top: 0, behavior: 'smooth' }); 
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // 4. 現在の基準コストの表示テキストを更新
@@ -129,7 +129,7 @@ function updateBaseCostDisplay() {
 function renderSongs() {
   const wrapper = document.getElementById("songs-wrapper");
   wrapper.innerHTML = "";
-  
+
   const keyword = document.getElementById("search-input").value.toLowerCase().trim();
   const isUnansweredOnly = document.getElementById("unanswered-only").checked;
 
@@ -137,7 +137,7 @@ function renderSongs() {
     const songConstStr = song.constStr || (song.constant ? song.constant.toFixed(1) : "");
     if (songConstStr !== currentTabStr) return false;
     if (keyword && song.title.toLowerCase().indexOf(keyword) === -1) return false;
-    if (isUnansweredOnly && song.total > 0) return false; 
+    if (isUnansweredOnly && song.total > 0) return false;
     return true;
   });
 
@@ -151,10 +151,10 @@ function renderSongs() {
     const globalIndex = globalSongs.findIndex(g => g.title === song.title && g.diff === song.diff);
     const minV = song.baseCost - 2;
     const maxV = song.baseCost + 2;
-    
+
     let cardClass = "song-card";
     let statusHtml = '<div class="calc-result status-zero">未回答</div>';
-    
+
     if (song.total > 0) {
       if (song.total >= minV && song.total <= maxV) {
         cardClass = "song-card card-ok";
@@ -202,7 +202,7 @@ function renderSongs() {
   filtered.forEach(song => {
     const globalIndex = globalSongs.findIndex(g => g.title === song.title && g.diff === song.diff);
     if (globalIndex !== -1) {
-      updateCost(globalIndex); 
+      updateCost(globalIndex);
     }
   });
 
@@ -220,26 +220,26 @@ function getOptions(selectedVal, maxVal) {
 // 6. ユーザーがコストを変更した時のリアルタイム計算
 function updateCost(globalIndex) {
   const card = document.getElementById(`card-${globalIndex}`);
-  if (!card) return; 
+  if (!card) return;
   const minV = parseInt(card.getAttribute('data-min'));
   const maxV = parseInt(card.getAttribute('data-max'));
-  
+
   const tairyoku = parseInt(card.querySelector('.in-tairyoku').value) || 0;
   const kenban = parseInt(card.querySelector('.in-kenban').value) || 0;
   const chuni = parseInt(card.querySelector('.in-chuni').value) || 0;
   const kuse = parseInt(card.querySelector('.in-kuse').value) || 0;
-  
+
   const total = tairyoku + kenban + chuni + kuse;
-  
+
   globalSongs[globalIndex].tairyoku = tairyoku;
   globalSongs[globalIndex].kenban = kenban;
   globalSongs[globalIndex].chuni = chuni;
   globalSongs[globalIndex].kuse = kuse;
   globalSongs[globalIndex].total = total;
-  
+
   card.querySelector('.current-total').innerText = total;
   const statusBox = card.querySelector('.status-box');
-  
+
   if (total === 0) {
     card.className = "song-card";
     statusBox.innerHTML = '<div class="calc-result status-zero">未回答</div>';
@@ -254,7 +254,7 @@ function updateCost(globalIndex) {
       statusBox.innerHTML = `<div class="calc-result status-ng">[NG] ${total - maxV} オーバー</div>`;
     }
   }
-  
+
   checkTabValidity();
 }
 
@@ -278,10 +278,10 @@ function checkTabValidity() {
     const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
     return songConstStr === currentTabStr;
   });
-  
-  let hasValidAnswer = false; 
-  let hasErrorAnswer = false; 
-  
+
+  let hasValidAnswer = false;
+  let hasErrorAnswer = false;
+
   tabSongs.forEach(s => {
     const minV = s.baseCost - 2;
     const maxV = s.baseCost + 2;
@@ -293,21 +293,21 @@ function checkTabValidity() {
       }
     }
   });
-  
+
   const btn = document.getElementById("save-btn");
   if (hasValidAnswer) {
     btn.disabled = false;
     if (hasErrorAnswer) {
       btn.innerText = "適正な回答のみを選抜して保存する";
-      btn.style.background = "#0076f6"; 
+      btn.style.background = "#0076f6";
     } else {
       btn.innerText = `定数 ${currentTabStr} の回答を保存する`;
-      btn.style.background = "#34c759"; 
+      btn.style.background = "#34c759";
     }
   } else {
     btn.disabled = true;
     btn.innerText = "保存できる適正な回答がありません";
-    btn.style.background = "#aeaeb2"; 
+    btn.style.background = "#aeaeb2";
   }
 }
 
@@ -316,18 +316,18 @@ function saveCurrentTab() {
   const btn = document.getElementById("save-btn");
   btn.disabled = true;
   btn.innerText = "保存処理中...";
-  
+
   const currentTabSongs = globalSongs.filter(s => {
     const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
     return songConstStr === currentTabStr;
   });
-  
+
   const validAnswers = currentTabSongs.filter(s => {
     const minV = s.baseCost - 2;
     const maxV = s.baseCost + 2;
     return s.total >= minV && s.total <= maxV;
   });
-  
+
   if (validAnswers.length === 0) {
     alert("保存できる適正な回答（OKの曲）がありません。");
     btn.disabled = false;
@@ -348,7 +348,7 @@ function saveCurrentTab() {
   const payload = {
     action: "save",
     playerName: currentUserName,
-    answers: validAnswers 
+    answers: validAnswers
   };
 
   fetch(GAS_URL, {
@@ -360,7 +360,7 @@ function saveCurrentTab() {
     .then((res) => {
       if (res.status === "success") {
         alert(`適正な回答（${validAnswers.length}曲）のデータを保存しました！`);
-        renderSongs(); 
+        renderSongs();
       } else {
         alert("保存エラー: " + res.message);
         btn.disabled = false;
@@ -379,11 +379,11 @@ function truncateByWidth(text, maxWidth, font) {
   const canvas = truncateByWidth.canvas || (truncateByWidth.canvas = document.createElement("canvas"));
   const context = canvas.getContext("2d");
   context.font = font || "9px sans-serif";
-  
+
   if (context.measureText(text).width <= maxWidth) {
     return text;
   }
-  
+
   let truncated = text;
   while (truncated.length > 0 && context.measureText(truncated + "...").width > maxWidth) {
     truncated = truncated.slice(0, -1);
@@ -394,14 +394,14 @@ function truncateByWidth(text, maxWidth, font) {
 // 10. 概要分析ランキングの生成（親ドロワー階層構造 ＋ 横幅ピクセル制限化）
 function initAnalytics(songs) {
   const container = document.getElementById("drawer-container");
-  container.innerHTML = ""; 
+  container.innerHTML = "";
 
   const metrics = [
-    { key: "total",    label: "逆詐称/詐称度", color: "rgba(255, 99, 132, 0.7)" },
-    { key: "tairyoku",  label: "体力要求度",   color: "rgba(54, 162, 235, 0.7)" },
-    { key: "kenban",    label: "鍵盤力要求度", color: "rgba(255, 206, 86, 0.7)" },
-    { key: "chuni",     label: "チュウニ力要求度",   color: "rgba(75, 192, 192, 0.7)" },
-    { key: "kuse",      label: "癖度",         color: "rgba(153, 102, 255, 0.7)" }
+    { key: "total", label: "逆詐称/詐称度", color: "rgba(255, 99, 132, 0.7)" },
+    { key: "tairyoku", label: "体力要求度", color: "rgba(54, 162, 235, 0.7)" },
+    { key: "kenban", label: "鍵盤力要求度", color: "rgba(255, 206, 86, 0.7)" },
+    { key: "chuni", label: "チュウニ力要求度", color: "rgba(75, 192, 192, 0.7)" },
+    { key: "kuse", label: "癖度", color: "rgba(153, 102, 255, 0.7)" }
   ];
 
   if (!songs || songs.length === 0) {
@@ -415,9 +415,9 @@ function initAnalytics(songs) {
 
   const totalHeader = document.createElement("button");
   totalHeader.className = "drawer-header";
-  totalHeader.style.background = "#e5e5ea"; 
+  totalHeader.style.background = "#e5e5ea";
   totalHeader.innerHTML = `<span>【総合】全定数ランキング (各項目上位50曲)</span> <span>▼</span>`;
-  
+
   const totalContent = document.createElement("div");
   totalContent.className = "drawer-content";
   totalContent.id = "drawer-content-all";
@@ -426,7 +426,7 @@ function initAnalytics(songs) {
     const isVisible = totalContent.style.display === "block";
     totalContent.style.display = isVisible ? "none" : "block";
     totalHeader.querySelector("span:last-child").innerText = isVisible ? "▼" : "▲";
-    
+
     if (!isVisible && !activeCharts["all"]) {
       switchMetric("all", 'tairyoku', metrics[1].color, metrics[1].label, songs);
     }
@@ -436,12 +436,12 @@ function initAnalytics(songs) {
   totalTabContainer.className = "tab-button-container";
 
   metrics.forEach((metric) => {
-    if (metric.key === "total") return; 
+    if (metric.key === "total") return;
     const btn = document.createElement("button");
     btn.className = `tab-btn-metric tab-btn-all`;
-    if (metric.key === "tairyoku") btn.classList.add("active"); 
+    if (metric.key === "tairyoku") btn.classList.add("active");
     btn.innerText = metric.label;
-    
+
     btn.onclick = () => {
       document.querySelectorAll(`.tab-btn-all`).forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
@@ -455,7 +455,7 @@ function initAnalytics(songs) {
   const totalCanvasContainer = document.createElement("div");
   totalCanvasContainer.id = "canvas-container-all";
   totalCanvasContainer.style.position = "relative";
-  totalCanvasContainer.style.height = `${50 * 28 + 50}px`; 
+  totalCanvasContainer.style.height = `${50 * 28 + 50}px`;
 
   const totalCanvas = document.createElement("canvas");
   totalCanvas.id = "canvas-all";
@@ -470,7 +470,7 @@ function initAnalytics(songs) {
   // 親ドロワーによる難易度帯の階層化定義
   const parentGroups = [
     { label: "15+ (15.5〜15.7)", constants: ["15.7", "15.6", "15.5"] },
-    { label: "15 (15.0〜15.4)",   constants: ["15.4", "15.3", "15.2", "15.1", "15.0"] },
+    { label: "15 (15.0〜15.4)", constants: ["15.4", "15.3", "15.2", "15.1", "15.0"] },
     { label: "14+ (14.8〜14.9)", constants: ["14.9", "14.8"] }
   ];
 
@@ -487,7 +487,7 @@ function initAnalytics(songs) {
     // 親ドロワーのヘッダー
     const pHeader = document.createElement("button");
     pHeader.className = "drawer-header";
-    pHeader.style.background = "#d1d1d6"; 
+    pHeader.style.background = "#d1d1d6";
     pHeader.style.color = "#000";
     pHeader.style.fontWeight = "bold";
     pHeader.style.fontSize = "15px";
@@ -512,7 +512,7 @@ function initAnalytics(songs) {
         const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
         return songConstStr === targetConst;
       });
-      
+
       if (filtered.length === 0) return;
 
       const wrapper = document.createElement("div");
@@ -523,11 +523,11 @@ function initAnalytics(songs) {
 
       const header = document.createElement("button");
       header.className = "drawer-header";
-      header.style.background = "#fff"; 
+      header.style.background = "#fff";
       header.style.fontSize = "13px";
       header.style.padding = "10px 12px";
       header.innerHTML = `<span>${targetConst} (${filtered.length}曲)</span> <span>▼</span>`;
-      
+
       const content = document.createElement("div");
       content.className = "drawer-content";
       content.id = `drawer-content-${targetConst.replace('.', '_')}`;
@@ -537,7 +537,7 @@ function initAnalytics(songs) {
         const isVisible = content.style.display === "block";
         content.style.display = isVisible ? "none" : "block";
         header.querySelector("span:last-child").innerText = isVisible ? "▼" : "▲";
-        
+
         if (!isVisible && !activeCharts[targetConst]) {
           switchMetric(targetConst, 'total', metrics[0].color, metrics[0].label, songs);
         }
@@ -551,7 +551,7 @@ function initAnalytics(songs) {
         btn.className = `tab-btn-metric tab-btn-${targetConst.replace('.', '_')}`;
         if (index === 0) btn.classList.add("active");
         btn.innerText = metric.label;
-        
+
         btn.onclick = () => {
           document.querySelectorAll(`.tab-btn-${targetConst.replace('.', '_')}`).forEach(b => b.classList.remove("active"));
           btn.classList.add("active");
@@ -574,7 +574,7 @@ function initAnalytics(songs) {
 
       wrapper.appendChild(header);
       wrapper.appendChild(content);
-      
+
       pContent.appendChild(wrapper);
     });
 
@@ -586,7 +586,7 @@ function initAnalytics(songs) {
 
 // 11. 各項目を切り替えた時のグラフ描画ロジック
 function switchMetric(targetConst, metricKey, color, labelText, songs) {
-  const isAll = targetConst === "all"; 
+  const isAll = targetConst === "all";
   const chartId = targetConst;
   const canvasId = isAll ? "canvas-all" : `canvas-${targetConst.replace('.', '_')}`;
   const canvasEl = document.getElementById(canvasId);
@@ -595,17 +595,17 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
 
   let filtered = [];
   if (isAll) {
-    filtered = [...songs]; 
+    filtered = [...songs];
   } else {
     filtered = songs.filter(s => {
       const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
       return songConstStr === targetConst;
     });
   }
-  
+
   const baseCost = isAll ? 16 : (baseCostMap[targetConst] || 16);
   let sorted = [...filtered];
-  
+
   if (metricKey === "total") {
     sorted.sort((a, b) => {
       const diffA = (a.total || 0) - (a.baseCost || baseCost);
@@ -626,7 +626,7 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
   const labels = sorted.map(s => {
     const constLabel = s.constant ? s.constant.toFixed(1) : (s.constStr || "");
     const titleString = isAll ? `[${constLabel}] ${s.title}` : s.title;
-    
+
     // Y軸フォント「9px sans-serif」において最大「125ピクセル」の幅に曲名を制限
     const shortTitle = truncateByWidth(titleString, 125, "9px sans-serif");
     return `${shortTitle} (${s.diff})`;
@@ -644,11 +644,11 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
   }
 
   let xMin = 0;
-  let xMax = undefined; 
+  let xMax = undefined;
 
   if (metricKey === "total") {
-    xMin = -2; 
-    xMax = 2;  
+    xMin = -2;
+    xMax = 2;
   }
 
   activeCharts[chartId] = new Chart(ctx, {
@@ -663,19 +663,19 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
       }]
     },
     options: {
-      indexAxis: 'y', 
+      indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: function(context) {
+            title: function (context) {
               const index = context[0].dataIndex;
               const constLabel = sorted[index].constant ? sorted[index].constant.toFixed(1) : (sorted[index].constStr || "");
               return `[定数 ${constLabel}] ${sorted[index].title} (${sorted[index].diff})`;
             },
-            label: function(context) {
+            label: function (context) {
               const val = context.raw;
               if (metricKey === "total") {
                 const sign = val > 0 ? "+" : "";
@@ -688,11 +688,11 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
       },
       scales: {
         x: {
-          min: xMin, 
-          max: xMax, 
+          min: xMin,
+          max: xMax,
           ticks: {
-            stepSize: (metricKey === "total") ? 1 : undefined, 
-            callback: function(value) {
+            stepSize: (metricKey === "total") ? 1 : undefined,
+            callback: function (value) {
               if (Math.floor(value) === value) return value;
             }
           }
@@ -708,8 +708,8 @@ function switchMetric(targetConst, metricKey, color, labelText, songs) {
 // 12. 回答画面から戻る処理
 function backToMainScreen() {
   document.getElementById("login-screen").style.display = "block";
-  document.getElementById("analytics-section").style.display = "block"; 
-  document.getElementById("main-screen").style.display = "none";     
+  document.getElementById("analytics-section").style.display = "block";
+  document.getElementById("main-screen").style.display = "none";
   document.getElementById("user-name-input").value = currentUserName;
   loadAnalyticsData();
 }
