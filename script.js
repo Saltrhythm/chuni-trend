@@ -41,16 +41,25 @@ function reverseAndAdjustTabButtons() {
   });
 }
 
-// 1. 全体集計ランキングのデータをGASから取得して初期化
+// 1. 全体集計ランキングのデータをGASから取得して初期化（POST通信版）
 function loadAnalyticsData() {
   const container = document.getElementById("drawer-container");
   if (!container.innerHTML || container.innerHTML.includes("ユーザー名入力後")) {
     container.innerHTML = '<div style="text-align:center; padding:20px; color:#8e8e93; font-size:12px; background:#f2f2f7; border-radius:8px;">ランキングデータを読み込み中...</div>';
   }
 
-  // 💡 URLの末尾に毎回変わるタイムスタンプ（現在時刻のミリ秒）を付加してキャッシュを回避
-  const url = `${GAS_URL}?action=getData&playerName=&_=${Date.now()}`;
-  fetch(url)
+  // 💡 POST パラメータ
+  const requestParams = {
+    action: "getData",
+    playerName: ""
+  };
+
+  // 💡 リダイレクト・コールドスタートエラーを防ぐため POST に変更
+  fetch(GAS_URL, {
+    method: "POST",
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(requestParams)
+  })
     .then(response => response.json())
     .then((res) => {
       if (res.status === "success") {
