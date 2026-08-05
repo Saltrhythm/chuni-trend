@@ -64,7 +64,7 @@ function loadAnalyticsData() {
     });
 }
 
-// 2. ユーザー名を入力してアンケート画面に進む処理
+// 2. ユーザー名を入力してアンケート画面に進む処理（POST通信修正版）
 function startSurvey() {
   const nameInput = document.getElementById("user-name-input").value.trim();
   if (!nameInput) { alert("ユーザー名を入力してください。"); return; }
@@ -74,10 +74,18 @@ function startSurvey() {
   document.getElementById("analytics-section").style.display = "none";
   document.getElementById("loading").style.display = "block";
 
-  // 💡 URLの末尾に毎回変わるタイムスタンプ（現在時刻のミリ秒）を付加してキャッシュを回避
-  const url = `${GAS_URL}?action=getData&playerName=${encodeURIComponent(currentUserName)}&_=${Date.now()}`;
+  // 💡 POST 送信するパラメータオブジェクト
+  const requestParams = {
+    action: "getData",
+    playerName: currentUserName
+  };
 
-  fetch(url)
+  // 💡 GET ではなく POST で GAS にリクエストを送信
+  fetch(GAS_URL, {
+    method: "POST",
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(requestParams)
+  })
     .then(response => response.json())
     .then((res) => {
       document.getElementById("loading").style.display = "none";
