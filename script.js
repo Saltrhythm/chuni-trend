@@ -41,28 +41,66 @@ function reverseAndAdjustTabButtons() {
   });
 }
 
-// 1. 全体集計ランキングのデータをGASから取得して初期化（POST通信版）
+// 💡 キャッシュ ＋ 自動リトライ付き通信関数（完成版）
+async function fetchWithClientCache(params, retries = 1, delay = 1000) {
+  const cacheKey = `gas_cache_${params.action}_${params.playerName || "global"}`;
+  
+  // ① sessionStorageにキャッシュがあれば即返却
+  const cachedData = sessionStorage.getItem(cacheKey);
+  if (cachedData) {
+    return JSON.parse(cachedData);
+  }
+
+  // ② fetch処理（1回失敗したら自動リトライ）
+  try {
+    const response = await fetch(GAS_URL, {
+      method: "POST",
+      redirect: "follow",
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(params)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP Status ${response.status}`);
+    }
+
+    const res = await response.json();
+
+    // ③ 成功時はキャッシュに保存
+    if (res.status === "success") {
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify(res));
+      } catch (e) {
+        console.warn("sessionStorage full:", e);
+      }
+    }
+    return res;
+
+  } catch (error) {
+    // GAS起動遅延などの通信失敗時は指定回数リトライ
+    if (retries > 0) {
+      console.warn(`通信失敗。自動リトライします... 残り${retries}回`, error);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithClientCache(params, retries - 1, delay);
+    }
+    throw error;
+  }
+}
+
+// 💡 ユーザーがデータを保存した際に呼ぶ共通関数（要追加）
+function clearUserCache(playerName) {
+  sessionStorage.removeItem(`gas_cache_getData_${playerName || "global"}`);
+  sessionStorage.removeItem(`gas_cache_getData_global`); // 全体ランキングも更新
+}
+
+// 1. 全体集計ランキングの読み込み
 function loadAnalyticsData() {
   const container = document.getElementById("drawer-container");
   if (!container.innerHTML || container.innerHTML.includes("ユーザー名入力後")) {
     container.innerHTML = '<div style="text-align:center; padding:20px; color:#8e8e93; font-size:12px; background:#f2f2f7; border-radius:8px;">ランキングデータを読み込み中...</div>';
   }
 
-  const requestParams = {
-    action: "getData",
-    playerName: ""
-  };
-
-  fetch(GAS_URL, {
-    method: "POST",
-    redirect: "follow", // 💡 リダイレクト追従を明示
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(requestParams)
-  })
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-      return response.json();
-    })
+  fetchWithClientCache({ action: "getData", playerName: "" })
     .then((res) => {
       if (res.status === "success") {
         initAnalytics(res.songs);
@@ -76,7 +114,7 @@ function loadAnalyticsData() {
     });
 }
 
-// 2. ユーザー名を入力してアンケート画面に進む処理（POST通信修正版）
+// 2. アンケート開始処理
 function startSurvey() {
   const nameInput = document.getElementById("user-name-input").value.trim();
   if (!nameInput) { alert("ユーザー名を入力してください。"); return; }
@@ -86,29 +124,13 @@ function startSurvey() {
   document.getElementById("analytics-section").style.display = "none";
   document.getElementById("loading").style.display = "block";
 
-  const requestParams = {
-    action: "getData",
-    playerName: currentUserName
-  };
-
-  fetch(GAS_URL, {
-    method: "POST",
-    redirect: "follow", // 💡 リダイレクト追従を明示
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(requestParams)
-  })
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-      return response.json();
-    })
+  fetchWithClientCache({ action: "getData", playerName: currentUserName })
     .then((res) => {
       document.getElementById("loading").style.display = "none";
       if (res.status === "success") {
         globalSongs = res.songs;
         document.getElementById("display-user-name").innerText = currentUserName;
         document.getElementById("main-screen").style.display = "block";
-
-        // タブ選択の状態、基準コストの表示、楽曲の描画を初期値（15.7）で同期
         switchTab(currentTabStr);
       } else {
         alert("エラーが発生しました: " + res.message);
@@ -333,71 +355,101 @@ function checkTabValidity() {
   }
 }
 
-// 9. 適正な回答（OK）のみを選抜してスプレッドシートに送信
-function saveCurrentTab() {
+// 9. 適正な回答（OK）のみを選抜してスプレッドシートに送信（プロ仕様改善版）
+async function saveCurrentTab() {
   const btn = document.getElementById("save-btn");
   btn.disabled = true;
   btn.innerText = "保存処理中...";
 
-  const currentTabSongs = globalSongs.filter(s => {
-    const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
-    return songConstStr === currentTabStr;
-  });
+  try {
+    // 1. 対象タブの曲を抽出
+    const currentTabSongs = globalSongs.filter(s => {
+      const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
+      return songConstStr === currentTabStr;
+    });
 
-  const validAnswers = currentTabSongs.filter(s => {
-    const minV = s.baseCost - 2;
-    const maxV = s.baseCost + 2;
-    return s.total >= minV && s.total <= maxV;
-  });
+    // 2. 適正範囲内の回答のみフィルタリング
+    const validAnswers = currentTabSongs.filter(s => {
+      const minV = s.baseCost - 2;
+      const maxV = s.baseCost + 2;
+      return s.total >= minV && s.total <= maxV;
+    });
 
-  if (validAnswers.length === 0) {
-    alert("保存できる適正な回答（OKの曲）がありません。");
-    btn.disabled = false;
-    checkTabValidity();
-    return;
-  }
-
-  const totalInputed = currentTabSongs.filter(s => s.total > 0).length;
-  if (validAnswers.length < totalInputed) {
-    const errorCount = totalInputed - validAnswers.length;
-    if (!confirm(`範囲外（エラー）の曲が ${errorCount} 件あります。\nこれらを除外した、適正な回答 ${validAnswers.length} 件のみを保存しますか？`)) {
-      btn.disabled = false;
-      checkTabValidity();
+    if (validAnswers.length === 0) {
+      alert("保存できる適正な回答（OKの曲）がありません。");
       return;
     }
-  }
 
-  const payload = {
-    action: "save",
-    playerName: currentUserName,
-    answers: validAnswers
-  };
-
-  fetch(GAS_URL, {
-    method: "POST",
-    redirect: "follow", // 💡 リダイレクト追従を明示
-    headers: { 'Content-Type': 'text/plain' }, // 💡 application/json から text/plain へ修正
-    body: JSON.stringify(payload)
-  })
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-      return response.json();
-    })
-    .then((res) => {
-      if (res.status === "success") {
-        alert(`適正な回答（${validAnswers.length}曲）のデータを保存しました！`);
-        renderSongs();
-      } else {
-        alert("保存エラー: " + res.message);
-        btn.disabled = false;
-        checkTabValidity();
+    // 3. エラー（範囲外）曲の確認ダイアログ
+    const totalInputed = currentTabSongs.filter(s => s.total > 0).length;
+    if (validAnswers.length < totalInputed) {
+      const errorCount = totalInputed - validAnswers.length;
+      if (!confirm(`範囲外（エラー）の曲が ${errorCount} 件あります。\nこれらを除外した、適正な回答 ${validAnswers.length} 件のみを保存しますか？`)) {
+        return;
       }
-    })
-    .catch((err) => {
-      alert("通信エラーが発生しました: " + err);
-      btn.disabled = false;
-      checkTabValidity();
-    });
+    }
+
+    // 4. ペイロードの軽量化（送信に必要なプロパティのみ抽出）
+    const cleanedAnswers = validAnswers.map(s => ({
+      title: s.title || s.name,
+      total: s.total,
+      // その他GASの保存処理で必要な最小限のキーのみ渡す
+    }));
+
+    const payload = {
+      action: "save",
+      playerName: currentUserName,
+      answers: cleanedAnswers
+    };
+
+    // 5. 通信処理（1回まで自動リトライ）
+    const executeSave = async (retries = 1, delay = 1000) => {
+      try {
+        const response = await fetch(GAS_URL, {
+          method: "POST",
+          redirect: "follow",
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+        return await response.json();
+      } catch (err) {
+        if (retries > 0) {
+          console.warn(`保存通信失敗。リトライします... 残り${retries}回`, err);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return executeSave(retries - 1, delay);
+        }
+        throw err;
+      }
+    };
+
+    const res = await executeSave();
+
+    if (res.status === "success") {
+      alert(`適正な回答（${validAnswers.length}曲）のデータを保存しました！`);
+      
+      // 💡 6. 【重要】保存成功のためクライアント側キャッシュをパージ（クリア）
+      if (typeof clearUserCache === "function") {
+        clearUserCache(currentUserName);
+      } else {
+        sessionStorage.removeItem(`gas_cache_getData_${currentUserName}`);
+        sessionStorage.removeItem(`gas_cache_getData_global`);
+      }
+
+      renderSongs();
+    } else {
+      alert("保存エラー: " + res.message);
+    }
+
+  } catch (err) {
+    console.error("saveCurrentTab error:", err);
+    alert("通信エラーが発生しました。時間を置いて再度お試しください。\n" + err);
+  } finally {
+    // 💡 7. 成功・失敗・キャンセルに関わらず必ずUIを復元
+    btn.disabled = false;
+    checkTabValidity();
+  }
 }
 
 // 文字列を実際のピクセル幅（描画スペース）ベースで綺麗に切り詰めるヘルパー関数
