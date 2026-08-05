@@ -48,19 +48,21 @@ function loadAnalyticsData() {
     container.innerHTML = '<div style="text-align:center; padding:20px; color:#8e8e93; font-size:12px; background:#f2f2f7; border-radius:8px;">ランキングデータを読み込み中...</div>';
   }
 
-  // 💡 POST パラメータ
   const requestParams = {
     action: "getData",
     playerName: ""
   };
 
-  // 💡 リダイレクト・コールドスタートエラーを防ぐため POST に変更
   fetch(GAS_URL, {
     method: "POST",
+    redirect: "follow", // 💡 リダイレクト追従を明示
     headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(requestParams)
   })
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+      return response.json();
+    })
     .then((res) => {
       if (res.status === "success") {
         initAnalytics(res.songs);
@@ -69,6 +71,7 @@ function loadAnalyticsData() {
       }
     })
     .catch((err) => {
+      console.error("loadAnalyticsData error:", err);
       container.innerHTML = '<div style="text-align:center; padding:20px; color:#ff3b30; font-size:12px;">通信エラーによりランキングを表示できません。</div>';
     });
 }
@@ -83,19 +86,21 @@ function startSurvey() {
   document.getElementById("analytics-section").style.display = "none";
   document.getElementById("loading").style.display = "block";
 
-  // 💡 POST 送信するパラメータオブジェクト
   const requestParams = {
     action: "getData",
     playerName: currentUserName
   };
 
-  // 💡 GET ではなく POST で GAS にリクエストを送信
   fetch(GAS_URL, {
     method: "POST",
+    redirect: "follow", // 💡 リダイレクト追従を明示
     headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(requestParams)
   })
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+      return response.json();
+    })
     .then((res) => {
       document.getElementById("loading").style.display = "none";
       if (res.status === "success") {
@@ -370,10 +375,14 @@ function saveCurrentTab() {
 
   fetch(GAS_URL, {
     method: "POST",
-    contentType: "application/json",
+    redirect: "follow", // 💡 リダイレクト追従を明示
+    headers: { 'Content-Type': 'text/plain' }, // 💡 application/json から text/plain へ修正
     body: JSON.stringify(payload)
   })
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+      return response.json();
+    })
     .then((res) => {
       if (res.status === "success") {
         alert(`適正な回答（${validAnswers.length}曲）のデータを保存しました！`);
