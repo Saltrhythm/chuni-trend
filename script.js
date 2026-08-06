@@ -14,6 +14,7 @@ const baseCostMap = {
 
 // ページを開いた瞬間に実行
 window.onload = function () {
+  pingWarmUp(); // 💡 ページを開いた瞬間に裏でGASをスリープ解除（ウォームアップ）
   reverseAndAdjustTabButtons(); // タブの並び替えとサイズ・デザインの調整を同時に実行
   loadAnalyticsData();
 };
@@ -138,22 +139,36 @@ function loadAnalyticsData() {
     });
 }
 
-// 💡 GASインスタンスを起こすための軽量ウォームアップ関数（外に定義）
-function pingWarmUp() {
-  fetch(GAS_URL, {
-    method: "POST",
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: "ping" })
-  }).catch(() => {}); // バックグラウンド処理のためエラーは無視
+// 💡 GASインスタンスを起こす軽量ウォームアップ通信（完了時にボタン有効化）
+async function pingWarmUp() {
+  const btn = document.querySelector("#login-screen button"); // 開始ボタンを取得
+  if (btn) {
+    btn.disabled = true;
+    btn.dataset.originalText = btn.innerText; // 元のテキストを退避
+    btn.innerText = "接続中...";
+  }
+
+  try {
+    await fetch(GAS_URL, {
+      method: "POST",
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: "ping" })
+    });
+  } catch (e) {
+    console.warn("pingWarmUp response check:", e);
+  } finally {
+    // 疎通チェック完了後、ボタンを元に戻す
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = btn.dataset.originalText || "アンケートを開始する";
+    }
+  }
 }
 
 // 2. アンケート開始処理
 function startSurvey() {
   const nameInput = document.getElementById("user-name-input").value.trim();
   if (!nameInput) { alert("ユーザー名を入力してください。"); return; }
-
-  // 💡 ユーザー名が入力されたら、即座に裏でGASを起こす通信を飛ばす
-  pingWarmUp();
 
   currentUserName = nameInput;
   document.getElementById("login-screen").style.display = "none";
