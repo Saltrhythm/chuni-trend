@@ -355,7 +355,7 @@ function checkTabValidity() {
   }
 }
 
-// 9. 適正な回答（OK）のみを選抜してスプレッドシートに送信（プロ仕様改善版）
+// 9. 適正な回答（OK）のみを選抜してスプレッドシートに送信（プロ仕様・完全版）
 async function saveCurrentTab() {
   const btn = document.getElementById("save-btn");
   btn.disabled = true;
@@ -389,11 +389,16 @@ async function saveCurrentTab() {
       }
     }
 
-    // 4. ペイロードの軽量化（送信に必要なプロパティのみ抽出）
+    // 4. ペイロードの構築（GAS側のsaveTabAnswersに必要な全プロパティを確実に渡す）
     const cleanedAnswers = validAnswers.map(s => ({
-      title: s.title || s.name,
-      total: s.total,
-      // その他GASの保存処理で必要な最小限のキーのみ渡す
+      title: s.title || s.name || "",
+      diff: s.diff || "MASTER",
+      constant: parseFloat(s.constant || s.constStr || 0),
+      tairyoku: parseInt(s.tairyoku || 0, 10),
+      kenban: parseInt(s.kenban || 0, 10),
+      chuni: parseInt(s.chuni || 0, 10),
+      kuse: parseInt(s.kuse || 0, 10),
+      total: parseInt(s.total || 0, 10)
     }));
 
     const payload = {
@@ -429,7 +434,7 @@ async function saveCurrentTab() {
     if (res.status === "success") {
       alert(`適正な回答（${validAnswers.length}曲）のデータを保存しました！`);
       
-      // 💡 6. 【重要】保存成功のためクライアント側キャッシュをパージ（クリア）
+      // 💡 6. 保存成功時にクライアント側キャッシュを消去（最新データを次回参照させるため）
       if (typeof clearUserCache === "function") {
         clearUserCache(currentUserName);
       } else {
@@ -446,7 +451,7 @@ async function saveCurrentTab() {
     console.error("saveCurrentTab error:", err);
     alert("通信エラーが発生しました。時間を置いて再度お試しください。\n" + err);
   } finally {
-    // 💡 7. 成功・失敗・キャンセルに関わらず必ずUIを復元
+    // 💡 7. 成否・キャンセルに関わらずUIを初期状態に復元
     btn.disabled = false;
     checkTabValidity();
   }
