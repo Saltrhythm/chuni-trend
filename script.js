@@ -77,7 +77,6 @@ async function fetchWithClientCache(params, retries = 1, delay = 1000) {
     return res;
 
   } catch (error) {
-    // GAS起動遅延などの通信失敗時は指定回数リトライ
     if (retries > 0) {
       console.warn(`通信失敗。自動リトライします... 残り${retries}回`, error);
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -87,10 +86,35 @@ async function fetchWithClientCache(params, retries = 1, delay = 1000) {
   }
 }
 
-// 💡 ユーザーがデータを保存した際に呼ぶ共通関数（要追加）
+// 💡 ユーザーがデータを保存した際に呼ぶ共通関数
 function clearUserCache(playerName) {
   sessionStorage.removeItem(`gas_cache_getData_${playerName || "global"}`);
   sessionStorage.removeItem(`gas_cache_getData_global`); // 全体ランキングも更新
+}
+
+// 💡 【追加機能】初期応答データに初期数値を保存する関数
+function initializeSongData(songs) {
+  if (!Array.isArray(songs)) return [];
+  return songs.map(song => ({
+    ...song,
+    initialTairyoku: parseInt(song.tairyoku || 0, 10),
+    initialKenban: parseInt(song.kenban || 0, 10),
+    initialChuni: parseInt(song.chuni || 0, 10),
+    initialKuse: parseInt(song.kuse || 0, 10),
+    initialTotal: parseInt(song.total || 0, 10)
+  }));
+}
+
+// 💡 【追加機能】読み込み時からパラメータが変更されているか判定する関数
+function isSongChanged(s) {
+  if (!s) return false;
+  return (
+    parseInt(s.tairyoku || 0, 10) !== (s.initialTairyoku ?? 0) ||
+    parseInt(s.kenban || 0, 10) !== (s.initialKenban ?? 0) ||
+    parseInt(s.chuni || 0, 10) !== (s.initialChuni ?? 0) ||
+    parseInt(s.kuse || 0, 10) !== (s.initialKuse ?? 0) ||
+    parseInt(s.total || 0, 10) !== (s.initialTotal ?? 0)
+  );
 }
 
 // 1. 全体集計ランキングの読み込み
@@ -114,10 +138,22 @@ function loadAnalyticsData() {
     });
 }
 
+// 💡 GASインスタンスを起こすための軽量ウォームアップ関数（外に定義）
+function pingWarmUp() {
+  fetch(GAS_URL, {
+    method: "POST",
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: "ping" })
+  }).catch(() => {}); // バックグラウンド処理のためエラーは無視
+}
+
 // 2. アンケート開始処理
 function startSurvey() {
   const nameInput = document.getElementById("user-name-input").value.trim();
   if (!nameInput) { alert("ユーザー名を入力してください。"); return; }
+
+  // 💡 ユーザー名が入力されたら、即座に裏でGASを起こす通信を飛ばす
+  pingWarmUp();
 
   currentUserName = nameInput;
   document.getElementById("login-screen").style.display = "none";
@@ -128,7 +164,8 @@ function startSurvey() {
     .then((res) => {
       document.getElementById("loading").style.display = "none";
       if (res.status === "success") {
-        globalSongs = res.songs;
+        // 💡 取得したデータに初期値を紐付け
+        globalSongs = initializeSongData(res.songs);
         document.getElementById("display-user-name").innerText = currentUserName;
         document.getElementById("main-screen").style.display = "block";
         switchTab(currentTabStr);
@@ -191,10 +228,12 @@ function renderSongs() {
     return;
   }
 
-  filtered.forEach((song) => {
+filtered.forEach((song) => {
     const globalIndex = globalSongs.findIndex(g => g.title === song.title && g.diff === song.diff);
     const minV = song.baseCost - 2;
     const maxV = song.baseCost + 2;
+
+    const hasChanged = isSongChanged(song);
 
     let cardClass = "song-card";
     let statusHtml = '<div class="calc-result status-zero">未回答</div>';
@@ -209,11 +248,19 @@ function renderSongs() {
       }
     }
 
+    // 💡 変更検知クラスと「編集あり」バッジ用HTMLの準備
+    let changedBadgeHtml = "";
+    if (hasChanged) {
+      cardClass += " is-changed";
+      changedBadgeHtml = '<span class="changed-badge">変更あり</span>';
+    }
+
     let html = `
       <div class="${cardClass}" id="card-${globalIndex}" data-min="${minV}" data-max="${maxV}">
         <h3>
           <span class="song-title-text">${song.title}</span>
           <span class="diff-badge diff-${song.diff}">${song.diff}</span>
+          ${changedBadgeHtml} <!-- バッジを表示 -->
         </h3>
         <div class="song-meta">定数: <strong>${song.constant.toFixed(1)}</strong> | 基準コスト: <strong>${song.baseCost}</strong> (${minV}〜${maxV})</div>
         
@@ -299,6 +346,25 @@ function updateCost(globalIndex) {
     }
   }
 
+  // 💡 リアルタイムでのバッジ表示・非表示コントロール
+  const hasChanged = isSongChanged(globalSongs[globalIndex]);
+  card.classList.toggle("is-changed", hasChanged);
+
+  const titleEl = card.querySelector('h3');
+  let badgeEl = titleEl.querySelector('.changed-badge');
+
+  if (hasChanged) {
+    if (!badgeEl) {
+      // バッジがまだ無ければタイトル末尾に追加
+      titleEl.insertAdjacentHTML('beforeend', '<span class="changed-badge">✏️ 編集あり</span>');
+    }
+  } else {
+    if (badgeEl) {
+      // 初期値に戻されたらバッジを消去
+      badgeEl.remove();
+    }
+  }
+
   checkTabValidity();
 }
 
@@ -316,7 +382,7 @@ function resetCurrentTabAnswers() {
   renderSongs();
 }
 
-// 8. エラー曲があっても、1つでも適正(OK)な回答があれば保存ボタンを押せるように制御
+// 8. エラー曲があっても、1つでも適正(OK)な変更済み回答があれば保存ボタンを押せるように制御
 function checkTabValidity() {
   const tabSongs = globalSongs.filter(s => {
     const songConstStr = s.constStr || (s.constant ? s.constant.toFixed(1) : "");
@@ -329,7 +395,9 @@ function checkTabValidity() {
   tabSongs.forEach(s => {
     const minV = s.baseCost - 2;
     const maxV = s.baseCost + 2;
-    if (s.total > 0) {
+    const hasChanged = isSongChanged(s);
+
+    if (s.total > 0 && hasChanged) {
       if (s.total >= minV && s.total <= maxV) {
         hasValidAnswer = true;
       } else {
@@ -342,20 +410,20 @@ function checkTabValidity() {
   if (hasValidAnswer) {
     btn.disabled = false;
     if (hasErrorAnswer) {
-      btn.innerText = "適正な回答のみを選抜して保存する";
+      btn.innerText = "変更された適正な回答のみを選抜して保存する";
       btn.style.background = "#0076f6";
     } else {
-      btn.innerText = `定数 ${currentTabStr} の回答を保存する`;
+      btn.innerText = `定数 ${currentTabStr} の変更を保存する`;
       btn.style.background = "#34c759";
     }
   } else {
     btn.disabled = true;
-    btn.innerText = "保存できる適正な回答がありません";
+    btn.innerText = "保存対象の変更された適正回答がありません";
     btn.style.background = "#aeaeb2";
   }
 }
 
-// 9. 適正な回答（OK）のみを選抜してスプレッドシートに送信（プロ仕様・完全版）
+// 9. 適正かつ「変更のあった回答のみ」を選抜して送信
 async function saveCurrentTab() {
   const btn = document.getElementById("save-btn");
   btn.disabled = true;
@@ -368,28 +436,28 @@ async function saveCurrentTab() {
       return songConstStr === currentTabStr;
     });
 
-    // 2. 適正範囲内の回答のみフィルタリング
+    // 2. 「適正範囲内（OK）」かつ「変更のあった」回答のみ選抜
     const validAnswers = currentTabSongs.filter(s => {
       const minV = s.baseCost - 2;
       const maxV = s.baseCost + 2;
-      return s.total >= minV && s.total <= maxV;
+      return s.total >= minV && s.total <= maxV && isSongChanged(s);
     });
 
     if (validAnswers.length === 0) {
-      alert("保存できる適正な回答（OKの曲）がありません。");
+      alert("保存できる変更された適正な回答（OKの曲）がありません。");
       return;
     }
 
-    // 3. エラー（範囲外）曲の確認ダイアログ
-    const totalInputed = currentTabSongs.filter(s => s.total > 0).length;
-    if (validAnswers.length < totalInputed) {
-      const errorCount = totalInputed - validAnswers.length;
-      if (!confirm(`範囲外（エラー）の曲が ${errorCount} 件あります。\nこれらを除外した、適正な回答 ${validAnswers.length} 件のみを保存しますか？`)) {
+    // 3. 変更された入力済みの曲のうち、エラー（範囲外）曲の確認ダイアログ
+    const totalChangedInputed = currentTabSongs.filter(s => s.total > 0 && isSongChanged(s)).length;
+    if (validAnswers.length < totalChangedInputed) {
+      const errorCount = totalChangedInputed - validAnswers.length;
+      if (!confirm(`範囲外（エラー）の変更曲が ${errorCount} 件あります。\nこれらを除外した、適正な回答 ${validAnswers.length} 件のみを保存しますか？`)) {
         return;
       }
     }
 
-    // 4. ペイロードの構築（GAS側のsaveTabAnswersに必要な全プロパティを確実に渡す）
+    // 4. ペイロード構築（変更があった楽曲のみ送信）
     const cleanedAnswers = validAnswers.map(s => ({
       title: s.title || s.name || "",
       diff: s.diff || "MASTER",
@@ -407,34 +475,43 @@ async function saveCurrentTab() {
       answers: cleanedAnswers
     };
 
-    // 5. 通信処理（1回まで自動リトライ）
-    const executeSave = async (retries = 1, delay = 1000) => {
-      try {
-        const response = await fetch(GAS_URL, {
-          method: "POST",
-          redirect: "follow",
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(payload)
-        });
+// 💡 delay を 0 に変更し、初回落ちたら待たずに直ちに再送信する
+const executeSave = async (retries = 2, delay = 0) => {
+  try {
+    const response = await fetch(GAS_URL, {
+      method: "POST",
+      redirect: "follow",
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
 
-        if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-        return await response.json();
-      } catch (err) {
-        if (retries > 0) {
-          console.warn(`保存通信失敗。リトライします... 残り${retries}回`, err);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return executeSave(retries - 1, delay);
-        }
-        throw err;
-      }
-    };
+    if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    if (retries > 0) {
+      console.warn(`GASウォームアップ完了待ち。直ちに再リトライ... 残り${retries}回`, err);
+      // delay = 0 のため待たずに即時リトライ
+      return executeSave(retries - 1, 0);
+    }
+    throw err;
+  }
+};
 
     const res = await executeSave();
 
     if (res.status === "success") {
-      alert(`適正な回答（${validAnswers.length}曲）のデータを保存しました！`);
-      
-      // 💡 6. 保存成功時にクライアント側キャッシュを消去（最新データを次回参照させるため）
+      alert(`変更のあった ${validAnswers.length} 曲のデータを保存しました！`);
+
+      // 💡 6. 保存成功後、送信された楽曲の初期値を現在の値で更新（ハイライトをクリアするため）
+      validAnswers.forEach(s => {
+        s.initialTairyoku = parseInt(s.tairyoku || 0, 10);
+        s.initialKenban = parseInt(s.kenban || 0, 10);
+        s.initialChuni = parseInt(s.chuni || 0, 10);
+        s.initialKuse = parseInt(s.kuse || 0, 10);
+        s.initialTotal = parseInt(s.total || 0, 10);
+      });
+
+      // クライアント側キャッシュの消去
       if (typeof clearUserCache === "function") {
         clearUserCache(currentUserName);
       } else {
@@ -451,7 +528,6 @@ async function saveCurrentTab() {
     console.error("saveCurrentTab error:", err);
     alert("通信エラーが発生しました。時間を置いて再度お試しください。\n" + err);
   } finally {
-    // 💡 7. 成否・キャンセルに関わらずUIを初期状態に復元
     btn.disabled = false;
     checkTabValidity();
   }

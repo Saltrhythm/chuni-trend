@@ -85,6 +85,36 @@ h2 { text-align: center; color: #0076f6; margin-bottom: 8px; font-size: 20px; }
 .diff-MAS { background: #9b5de5; } .diff-ULT { background: #ff007f; } .diff-EXP { background: #f15bb5; }
 .song-meta { font-size: 11px; color: #8e8e93; margin-bottom: 10px; }
 
+/* 💡 変更検知用のバッジ（黄色〜オレンジ） */
+.changed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: linear-gradient(135deg, #ff9500, #ff5e00); /* オレンジ系グラデーション */
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 7px;
+  border-radius: 12px;
+  margin-left: 6px;
+  vertical-align: middle;
+  box-shadow: 0 2px 4px rgba(255, 149, 0, 0.3);
+  animation: pulseBadge 2s infinite ease-in-out;
+}
+
+/* じんわり点滅させるアニメーション */
+@keyframes pulseBadge {
+  0% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.04); opacity: 1; box-shadow: 0 2px 8px rgba(255, 149, 0, 0.6); }
+  100% { transform: scale(1); opacity: 0.95; }
+}
+
+/* 💡 変更済みカード自体のフレーム強調 */
+.song-card.is-changed {
+  border: 2px solid #ff9500 !important;
+  background-color: rgb(255, 238, 215) !important;
+}
+
 /* パラメータ行とセレクトボックス */
 .param-row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; padding-bottom: 6px; border-bottom: 1px dashed #e5e5ea; }
 .param-row label { font-size: 12px; font-weight: bold; color: #3a3a3c; flex: 1; padding-right: 8px; }
